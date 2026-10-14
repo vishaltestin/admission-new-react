@@ -30,6 +30,13 @@ export default async function NewLeadPage() {
       name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
     })),
     campaigns: raw.campaigns.map((c) => ({ id: c.id, name: c.name })),
+    customFields: raw.customFields.map((a) => ({
+      code: a.code,
+      name: a.name,
+      type: a.type,
+      options: a.options,
+      isRequired: a.isRequired,
+    })),
   };
 
   return (

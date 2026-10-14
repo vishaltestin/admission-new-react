@@ -49,7 +49,25 @@ export default async function EditLeadPage({
       name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
     })),
     campaigns: raw.campaigns.map((c) => ({ id: c.id, name: c.name })),
+    customFields: raw.customFields.map((a) => ({
+      code: a.code,
+      name: a.name,
+      type: a.type,
+      options: a.options,
+      isRequired: a.isRequired,
+    })),
   };
+
+  const extraFields =
+    lead.extraFields && typeof lead.extraFields === "object"
+      ? (lead.extraFields as Record<string, unknown>)
+      : {};
+  const custom: Record<string, string> = {};
+  for (const field of options.customFields) {
+    const value = extraFields[field.code];
+    if (typeof value === "string") custom[field.code] = value;
+    else if (value != null) custom[field.code] = String(value);
+  }
 
   const initialValues: LeadFormData = {
     name: lead.name ?? "",
@@ -69,6 +87,7 @@ export default async function EditLeadPage({
     leadAssignTo: lead.leadAssignTo ? String(lead.leadAssignTo) : "",
     nextFollowupAt: toDateTimeLocal(lead.nextFollowupAt),
     note: "",
+    custom,
   };
 
   return (

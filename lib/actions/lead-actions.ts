@@ -20,6 +20,7 @@ import {
   communicationLogSchema,
 } from "@/lib/validations/lead";
 import { prisma } from "@/lib/prisma";
+import { Prisma } from "@/generated/prisma/client";
 
 async function resolveOrganizationId(user: SessionUser) {
   if (user.organizationId != null) return user.organizationId;
@@ -36,6 +37,28 @@ function clean<T extends Record<string, unknown>>(obj: T) {
   ) as T;
 }
 
+/** Validate + reduce submitted custom values against org attribute defs. */
+async function resolveCustomExtras(
+  organizationId: number,
+  custom: Record<string, string> | undefined,
+): Promise<{ error?: string; extras: Record<string, string> }> {
+  const attributes = await prisma.attribute.findMany({
+    where: { organizationId, entityType: "lead", isActive: true },
+  });
+  const submitted = custom ?? {};
+  const missing = attributes.find(
+    (a) => a.isRequired && !(submitted[a.code] ?? "").trim(),
+  );
+  if (missing) return { error: `"${missing.name}" is required.`, extras: {} };
+
+  const definedCodes = new Set(attributes.map((a) => a.code));
+  const extras: Record<string, string> = {};
+  for (const [code, value] of Object.entries(submitted)) {
+    if (definedCodes.has(code)) extras[code] = value;
+  }
+  return { extras };
+}
+
 export async function createLead(
   values: unknown,
 ): Promise<ActionResult<{ id: number }>> {
@@ -44,12 +67,15 @@ export async function createLead(
   if (!parsed.success) {
     return fail("Please fix the errors below", parsed.error.flatten().fieldErrors);
   }
-  const { note, ...data } = parsed.data;
+  const { note, custom, ...data } = parsed.data;
 
   const organizationId = await resolveOrganizationId(user);
   if (!organizationId) {
     return fail("No organization found. Create an organization first.");
   }
+
+  const customResult = await resolveCustomExtras(organizationId, custom);
+  if (customResult.error) return fail(customResult.error);
 
   try {
     const lead = await prisma.lead.create({
@@ -59,6 +85,9 @@ export async function createLead(
         organizationId,
         createdBy: user.id,
         leadRegistrationDate: new Date(),
+        ...(Object.keys(customResult.extras).length
+          ? { extraFields: customResult.extras }
+          : {}),
       }),
     });
 
@@ -97,17 +126,31 @@ export async function updateLead(
   if (!parsed.success) {
     return fail("Please fix the errors below", parsed.error.flatten().fieldErrors);
   }
-  const { note: _note, ...data } = parsed.data;
+  const { note: _note, custom, ...data } = parsed.data;
 
   const lead = await prisma.lead.findFirst({
     where: { id, ...orgScope(user) },
   });
   if (!lead) return fail("Lead not found.");
 
+  const customResult = await resolveCustomExtras(lead.organizationId, custom);
+  if (customResult.error) return fail(customResult.error);
+
   try {
+    const existingExtras =
+      lead.extraFields && typeof lead.extraFields === "object"
+        ? (lead.extraFields as Record<string, unknown>)
+        : {};
     await prisma.lead.update({
       where: { id: lead.id },
-      data: clean(data),
+      data: clean({
+        ...data,
+        // Merge: keys omitted from the form keep their stored values.
+        extraFields: {
+          ...existingExtras,
+          ...customResult.extras,
+        } as Prisma.InputJsonValue,
+      }),
     });
     revalidatePath("/leads");
     revalidatePath(`/leads/${lead.id}`);

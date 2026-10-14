@@ -25,6 +25,8 @@ export const leadSchema = z.object({
   leadAssignTo: optionalFk,
   nextFollowupAt: optionalDateTime,
   note: emptyToNull(z.string().max(5000)), // optional first note on create
+  /** Dynamic custom fields (attribute code -> value), stored in extra_fields_json. */
+  custom: z.record(z.string(), z.string().max(2000)).optional(),
 });
 
 export type LeadFormValues = z.infer<typeof leadSchema>;
@@ -66,6 +68,7 @@ export const leadFormSchema = z.object({
   leadAssignTo: fkSelect,
   nextFollowupAt: z.string().optional(),
   note: z.string().max(5000, "Note is too long").optional(),
+  custom: z.record(z.string(), z.string().max(2000)).optional(),
 });
 
 export type LeadFormData = z.infer<typeof leadFormSchema>;

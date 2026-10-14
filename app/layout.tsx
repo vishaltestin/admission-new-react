@@ -1,8 +1,9 @@
-import type { Metadata } from "next"
+import type { Metadata, Viewport } from "next"
 import { Geist, Geist_Mono, Inter } from "next/font/google"
 
 import "./globals.css"
 import { ThemeProvider } from "@/components/theme-provider"
+import { CookieConsent } from "@/components/layout/cookie-consent"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { cn } from "@/lib/utils";
@@ -20,6 +21,15 @@ export const metadata: Metadata = {
     template: "%s | DF CRM",
   },
   description: "Lead management CRM built with Next.js",
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "DF CRM",
+  },
+}
+
+export const viewport: Viewport = {
+  themeColor: "#0f172a",
 }
 
 export default function RootLayout({
@@ -37,6 +47,7 @@ export default function RootLayout({
         <ThemeProvider>
           <TooltipProvider>
             {children}
+            <CookieConsent />
             <Toaster richColors position="top-right" />
           </TooltipProvider>
         </ThemeProvider>

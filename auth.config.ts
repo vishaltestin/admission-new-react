@@ -24,8 +24,11 @@ export const authConfig = {
       // /api/public serves cross-origin webform embeds.
       const isPublicApi =
         path.startsWith("/api/integrations") || path.startsWith("/api/public");
-      // Public capture pages: webforms and landing pages.
-      const isPublicPage = path.startsWith("/f/") || path.startsWith("/p/");
+      // Public capture pages: webforms, landing pages and application forms.
+      const isPublicPage =
+        path.startsWith("/f/") ||
+        path.startsWith("/p/") ||
+        path.startsWith("/apply/");
       const isLoginPage = path === "/login";
 
       if (isAuthRoute || isPublicApi || isPublicPage) return true;

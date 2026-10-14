@@ -5,6 +5,8 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
+  ClipboardList,
+  Cog,
   FormInput,
   Kanban,
   LayoutDashboard,
@@ -59,6 +61,7 @@ const navGroups: {
       { title: "Leads", url: "/leads", icon: UsersRound, exact: true },
       { title: "Pipeline", url: "/leads/pipeline", icon: Kanban },
       { title: "Import Leads", url: "/leads/import", icon: Upload },
+      { title: "Applications", url: "/application-forms", icon: ClipboardList },
     ],
   },
   {
@@ -87,6 +90,7 @@ const navGroups: {
       { title: "Roles", url: "/roles", icon: ShieldCheck },
       { title: "Teams", url: "/teams", icon: Building2 },
       { title: "Integrations", url: "/integrations", icon: Plug },
+      { title: "Settings", url: "/settings", icon: Cog },
     ],
   },
 ];

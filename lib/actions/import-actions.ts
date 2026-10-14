@@ -1,12 +1,15 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import * as XLSX from "xlsx";
 import { z } from "zod";
 
 import { fail, ok, requireUser, type ActionResult } from "@/lib/action-utils";
 import { prisma } from "@/lib/prisma";
+import type { SessionUser } from "@/lib/action-utils";
 
 const MAX_ROWS = 1000;
+const MAX_FILE_BYTES = 2 * 1024 * 1024;
 
 const rowSchema = z.object({
   name: z.string().max(150).optional(),
@@ -27,6 +30,17 @@ type CsvRow = z.infer<typeof rowSchema> & {
   statusName?: string;
   typeName?: string;
 };
+
+export type ImportSummary = {
+  uploadId: number;
+  total: number;
+  imported: number;
+  duplicates: number;
+  failed: number;
+  failures: { row: number; mobile: string; name: string; reason: string }[];
+};
+
+/* ------------------------------- parsing -------------------------------- */
 
 /** Minimal RFC4180-ish CSV parser (quotes, escaped quotes, commas). */
 function parseCsv(text: string): string[][] {
@@ -72,6 +86,37 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
+const normalizeHeader = (value: string) =>
+  value.trim().toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/** Reads .csv, .xlsx and .xls into a trim-normalized grid of strings. */
+async function parseSpreadsheet(file: File): Promise<string[][]> {
+  const name = file.name.toLowerCase();
+  if (file.size > MAX_FILE_BYTES) {
+    throw new Error("File is too large (max 2 MB).");
+  }
+  if (name.endsWith(".csv") || name.endsWith(".txt")) {
+    return parseCsv(await file.text());
+  }
+  if (name.endsWith(".xlsx") || name.endsWith(".xls")) {
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    const sheetName = workbook.SheetNames[0];
+    const sheet = workbook.Sheets[sheetName];
+    if (!sheet) throw new Error("The spreadsheet has no sheets.");
+    const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+      header: 1,
+      raw: false,
+      defval: "",
+      blankrows: false,
+    });
+    return grid.map((row) => row.map((cell) => String(cell ?? "").trim()));
+  }
+  throw new Error("Only .csv, .xlsx and .xls files are supported.");
+}
+
+/* --------------------------- header suggestion -------------------------- */
+
 const HEADER_MAP: Record<string, string> = {
   name: "name",
   fullname: "name",
@@ -99,71 +144,56 @@ const HEADER_MAP: Record<string, string> = {
   notes: "note",
 };
 
-export type ImportSummary = {
-  uploadId: number;
-  total: number;
-  imported: number;
-  duplicates: number;
-  failed: number;
-  failures: { row: number; mobile: string; name: string; reason: string }[];
-};
+/** Target fields the mapping UI offers (order-matters for the UI). */
+export const IMPORT_TARGETS = [
+  { key: "name", label: "Name" },
+  { key: "mobile", label: "Mobile (required)" },
+  { key: "alternateMobile", label: "Alternate mobile" },
+  { key: "email", label: "Email" },
+  { key: "city", label: "City" },
+  { key: "state", label: "State" },
+  { key: "country", label: "Country" },
+  { key: "sourceName", label: "Source (name)" },
+  { key: "statusName", label: "Status (name)" },
+  { key: "typeName", label: "Type (name)" },
+  { key: "note", label: "Note" },
+] as const;
+export type ImportTargetKey = (typeof IMPORT_TARGETS)[number]["key"];
 
-export async function importLeadsFromCsv(
-  formData: FormData,
-): Promise<ActionResult<ImportSummary>> {
-  const user = await requireUser();
-
-  const file = formData.get("file");
-  if (!(file instanceof File)) {
-    return fail("Please choose a CSV file to import.");
+function suggestMapping(headers: string[]): Record<string, string> {
+  const suggestion: Record<string, string> = {};
+  const used = new Set<string>();
+  for (const header of headers) {
+    const target = HEADER_MAP[normalizeHeader(header)];
+    if (target && !used.has(target) && !suggestion[target]) {
+      suggestion[target] = header;
+      used.add(target);
+    }
   }
-  if (!file.name.toLowerCase().endsWith(".csv")) {
-    return fail("Only .csv files are supported.", { file: ["Must be a .csv file"] });
-  }
-  if (file.size > 2 * 1024 * 1024) {
-    return fail("File is too large (max 2 MB).");
-  }
+  return suggestion;
+}
 
-  const defaultStatusId = Number(formData.get("leadStatusId")) || null;
-  const assignToId = Number(formData.get("leadAssignTo")) || null;
-  const defaultSourceId = Number(formData.get("leadSourceId")) || null;
+/* ------------------------------- the engine ----------------------------- */
 
-  const organizationId =
-    user.organizationId ??
-    (await prisma.organization.findFirst({ orderBy: { id: "asc" } }))?.id ??
-    null;
-  if (!organizationId) return fail("No organization found.");
-
-  const text = await file.text();
-  const grid = parseCsv(text).filter((r) => r.some((f) => f.trim() !== ""));
-  if (grid.length < 2) {
-    return fail("The CSV has no data rows.", {
+async function executeImport(args: {
+  user: SessionUser;
+  organizationId: number;
+  fileName: string;
+  grid: string[][];
+  columnFor: Record<string, number>;
+  defaults: { leadStatusId: number | null; leadSourceId: number | null; leadAssignTo: number | null };
+}): Promise<ActionResult<ImportSummary>> {
+  const { user, organizationId, fileName, grid, columnFor, defaults } = args;
+  const dataRows = grid.slice(1).filter((r) => r.some((f) => f.trim() !== ""));
+  if (dataRows.length === 0) {
+    return fail("The file has no data rows.", {
       file: ["Expected a header row plus at least one data row"],
     });
   }
-
-  const headers = grid[0].map((h) =>
-    h.trim().toLowerCase().replace(/[^a-z0-9]/g, ""),
-  );
-  const columnFor: Record<string, number> = {};
-  headers.forEach((header, index) => {
-    const mapped = HEADER_MAP[header];
-    if (mapped && columnFor[mapped] === undefined) {
-      columnFor[mapped] = index;
-    }
-  });
-  if (columnFor.mobile === undefined) {
-    return fail("Could not find a mobile column in the CSV header.", {
-      file: ["Add a 'mobile' column (also accepted: phone, contact)"],
-    });
-  }
-
-  const dataRows = grid.slice(1);
   if (dataRows.length > MAX_ROWS) {
     return fail(`Too many rows (${dataRows.length}). Maximum ${MAX_ROWS} per import.`);
   }
 
-  // Masters for name-based mapping.
   const [sources, statuses, types] = await Promise.all([
     prisma.leadSource.findMany({ where: { organizationId } }),
     prisma.leadStatus.findMany({ where: { organizationId } }),
@@ -175,12 +205,11 @@ export async function importLeadsFromCsv(
           ?.id ?? null
       : null;
 
-  // Create the upload record up-front (status: processing).
   const upload = await prisma.leadUpload.create({
     data: {
       organizationId,
       userId: user.id,
-      fileName: file.name,
+      fileName,
       totalRows: dataRows.length,
       status: "processing",
       startedAt: new Date(),
@@ -247,16 +276,14 @@ export async function importLeadsFromCsv(
     return true;
   });
 
-  const PROG = { leadsPerTick: 200 };
   let imported = 0;
   const sourceUsage = new Map<number, number>();
 
-  for (let index = 0; index < toInsert.length; index += PROG.leadsPerTick) {
-    const chunk = toInsert.slice(index, index + PROG.leadsPerTick);
+  for (let index = 0; index < toInsert.length; index += 200) {
+    const chunk = toInsert.slice(index, index + 200);
     await prisma.lead.createMany({
       data: chunk.map((row) => {
-        const sourceId =
-          findByName(sources, row.sourceName) ?? defaultSourceId ?? null;
+        const sourceId = findByName(sources, row.sourceName) ?? defaults.leadSourceId ?? null;
         if (sourceId) {
           sourceUsage.set(sourceId, (sourceUsage.get(sourceId) ?? 0) + 1);
         }
@@ -270,10 +297,9 @@ export async function importLeadsFromCsv(
           state: row.state ?? null,
           country: row.country ?? null,
           leadSourceId: sourceId,
-          leadStatusId:
-            findByName(statuses, row.statusName) ?? defaultStatusId ?? null,
+          leadStatusId: findByName(statuses, row.statusName) ?? defaults.leadStatusId ?? null,
           typeId: findByName(types, row.typeName),
-          leadAssignTo: assignToId,
+          leadAssignTo: defaults.leadAssignTo,
           createdBy: user.id,
           leadRegistrationDate: new Date(),
         };
@@ -290,8 +316,7 @@ export async function importLeadsFromCsv(
     });
   }
 
-  const status =
-    failures.length === 0 ? "completed" : imported > 0 ? "partial" : "failed";
+  const status = failures.length === 0 ? "completed" : imported > 0 ? "partial" : "failed";
 
   await prisma.leadUpload.update({
     where: { id: upload.id },
@@ -318,5 +343,182 @@ export async function importLeadsFromCsv(
     duplicates: duplicateCount,
     failed: failures.length,
     failures: failures.slice(0, 50),
+  });
+}
+
+async function resolveOrg(user: SessionUser) {
+  return (
+    user.organizationId ??
+    (await prisma.organization.findFirst({ orderBy: { id: "asc" } }))?.id ??
+    null
+  );
+}
+
+function readDefaults(formData: FormData) {
+  return {
+    leadStatusId: Number(formData.get("leadStatusId")) || null,
+    leadAssignTo: Number(formData.get("leadAssignTo")) || null,
+    leadSourceId: Number(formData.get("leadSourceId")) || null,
+  };
+}
+
+/* -------------------------------- actions ------------------------------- */
+
+/** Legacy one-step import: auto-detect columns from header aliases (CSV). */
+export async function importLeadsFromCsv(
+  formData: FormData,
+): Promise<ActionResult<ImportSummary>> {
+  const user = await requireUser();
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return fail("Please choose a file to import.");
+  }
+  if (!file.name.toLowerCase().endsWith(".csv")) {
+    return fail("Only .csv files are supported for the quick import.", {
+      file: ["Use the mapping importer for .xlsx/.xls files"],
+    });
+  }
+  if (file.size > MAX_FILE_BYTES) {
+    return fail("File is too large (max 2 MB).");
+  }
+
+  const organizationId = await resolveOrg(user);
+  if (!organizationId) return fail("No organization found.");
+
+  const defaults = readDefaults(formData);
+  const text = await file.text();
+  const grid = parseCsv(text).filter((r) => r.some((f) => f.trim() !== ""));
+  if (grid.length < 2) {
+    return fail("The CSV has no data rows.", {
+      file: ["Expected a header row plus at least one data row"],
+    });
+  }
+
+  const headers = grid[0].map(normalizeHeader);
+  const columnFor: Record<string, number> = {};
+  headers.forEach((header, index) => {
+    const mapped = HEADER_MAP[header];
+    if (mapped && columnFor[mapped] === undefined) {
+      columnFor[mapped] = index;
+    }
+  });
+  if (columnFor.mobile === undefined) {
+    return fail("Could not find a mobile column in the CSV header.", {
+      file: ["Add a 'mobile' column (also accepted: phone, contact)"],
+    });
+  }
+
+  return executeImport({
+    user,
+    organizationId,
+    fileName: file.name,
+    grid,
+    columnFor,
+    defaults,
+  });
+}
+
+/* ---------------------------- preview + mapped --------------------------- */
+
+export type ImportPreview = {
+  fileName: string;
+  rowCount: number;
+  headers: string[];
+  sample: string[][];
+  suggested: Record<string, string>;
+};
+
+/** Step 1: parse the file and propose a column mapping (.csv/.xlsx/.xls). */
+export async function previewImport(
+  formData: FormData,
+): Promise<ActionResult<ImportPreview>> {
+  const user = await requireUser();
+  void user;
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return fail("Please choose a file to import.");
+  }
+
+  let grid: string[][];
+  try {
+    grid = await parseSpreadsheet(file);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Could not read the file.", {
+      file: [error instanceof Error ? error.message : "Unreadable file"],
+    });
+  }
+  grid = grid.filter((r) => r.some((f) => f.trim() !== ""));
+  if (grid.length < 2) {
+    return fail("The file has no data rows.", {
+      file: ["Expected a header row plus at least one data row"],
+    });
+  }
+
+  const headers = grid[0].map((h) => h.trim());
+  return ok("Preview ready", {
+    fileName: file.name,
+    rowCount: grid.length - 1,
+    headers,
+    sample: grid.slice(1, 6).map((row) =>
+      headers.map((_, index) => row[index] ?? ""),
+    ),
+    suggested: suggestMapping(headers),
+  });
+}
+
+const mappingSchema = z.record(z.string(), z.string());
+
+/** Step 2: import using the explicit column mapping chosen by the user. */
+export async function runMappedImport(
+  formData: FormData,
+): Promise<ActionResult<ImportSummary>> {
+  const user = await requireUser();
+  const organizationId = await resolveOrg(user);
+  if (!organizationId) return fail("No organization found.");
+
+  const file = formData.get("file");
+  if (!(file instanceof File)) {
+    return fail("Please choose a file to import.");
+  }
+  const mappingRaw = formData.get("mapping");
+  const mappingParsed = mappingSchema.safeParse(
+    typeof mappingRaw === "string" ? JSON.parse(mappingRaw || "{}") : {},
+  );
+  if (!mappingParsed.success) return fail("Invalid mapping.");
+  const mapping = mappingParsed.data;
+  if (!(mapping.mobile ?? "").trim()) {
+    return fail("Map the Mobile column before importing.", { mapping: ["Mobile is required"] });
+  }
+
+  let grid: string[][];
+  try {
+    grid = await parseSpreadsheet(file);
+  } catch (error) {
+    return fail(error instanceof Error ? error.message : "Could not read the file.");
+  }
+  grid = grid.filter((r) => r.some((f) => f.trim() !== ""));
+  if (grid.length < 2) {
+    return fail("The file has no data rows.");
+  }
+
+  const headers = grid[0].map((h) => h.trim());
+  const columnFor: Record<string, number> = {};
+  for (const target of IMPORT_TARGETS) {
+    const chosen = mapping[target.key];
+    if (!chosen) continue;
+    const index = headers.indexOf(chosen);
+    if (index >= 0 && columnFor[target.key] === undefined) {
+      columnFor[target.key] = index;
+    }
+  }
+
+  return executeImport({
+    user,
+    organizationId,
+    fileName: file.name,
+    grid,
+    columnFor,
+    defaults: readDefaults(formData),
   });
 }

@@ -52,9 +52,11 @@ model Organization {
   leadIntegrations  LeadIntegration[]
   webhooks          Webhook[]
   automationRules   AutomationRule[]
-  webForms          WebForm[]
-  landingPages      LandingPage[]
-  coupons           Coupon[]
+  webForms        WebForm[]
+  landingPages    LandingPage[]
+  coupons         Coupon[]
+  attributes      Attribute[]
+  applicationForms ApplicationForm[]
 
   @@map("organizations")
 }
@@ -281,6 +283,7 @@ model Lead {
   leadScore            Int       @default(0) @map("lead_score")
   leadWeightCount      Int       @default(0) @map("lead_weight_count")
   leadAssignTo         Int?      @map("lead_assign_to")
+  applicationFormId    Int?      @map("application_form_id")
   createdBy            Int?      @map("created_by")
   nextFollowupAt       DateTime? @map("next_followup_at")
   leadRegistrationDate DateTime? @map("lead_registration_date")
@@ -406,13 +409,17 @@ model Designation {
 model GeneralSetting {
   id             Int      @id @default(autoincrement())
   organizationId Int?     @unique @map("organization_id")
-  appName        String?  @map("app_name")
-  currency       String?
-  timezone       String?
-  dateFormat     String?  @map("date_format")
-  logo           String?
-  favicon        String?
-  status         Int      @default(1)
+  appName            String?  @map("app_name")
+  currency           String?
+  timezone           String?
+  dateFormat         String?  @map("date_format")
+  logo               String?
+  favicon            String?
+  defaultGateway     String?  @map("default_payment_gateway")
+  paymentCredentials Json?    @map("payment_credentials")
+  maintenanceMode    Int      @default(0) @map("maintenance_mode")
+  maintenanceMessage String?  @map("maintenance_message")
+  status             Int      @default(1)
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
@@ -901,4 +908,106 @@ model CouponUsage {
   @@index([couponId])
   @@index([organizationId])
   @@map("coupon_usages")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4B — custom lead attributes & application forms
+// ---------------------------------------------------------------------------
+
+model Attribute {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @default(0) @map("organization_id")
+  /** Slug key used inside leads.extra_fields_json. */
+  code           String
+  name           String
+  /** text | textarea | number | email | date | select | radio | checkbox */
+  type           String   @default("text")
+  lookupType     String?  @map("lookup_type")
+  /** lead (only lead supported by the UI today). */
+  entityType     String   @default("lead") @map("entity_type")
+  sortOrder      Int      @default(0) @map("sort_order")
+  validation     String?
+  /** Comma-separated options for select/radio/checkbox. */
+  options        String?
+  isRequired     Boolean  @default(false) @map("is_required")
+  isActive       Boolean  @default(true) @map("is_active")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, entityType, code])
+  @@map("attributes")
+}
+
+model ApplicationForm {
+  id                Int      @id @default(autoincrement())
+  organizationId    Int      @default(0) @map("organization_id")
+  /** Public slug used in /apply/{uniqueCode} URLs. */
+  uniqueCode        String   @map("unique_code")
+  title             String?
+  description       String?  @db.Text
+  status            Int      @default(1)
+  createdBy         Int?     @map("created_by")
+  /** JSON arrays of allowed country names / institute ids. */
+  allowedCountries  Json?    @map("allowed_countries")
+  allowedInstitutes Json?    @map("allowed_institutes")
+  fees              Decimal? @db.Decimal(10, 2)
+  tax               Decimal? @db.Decimal(5, 2)
+  totalAmount       Decimal? @map("total_amount") @db.Decimal(10, 2)
+  /** manual | gateway (reserved) */
+  gateway           String?  @default("manual")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  organization Organization               @relation(fields: [organizationId], references: [id])
+  responses    ApplicationFormResponse[]
+
+  @@unique([organizationId, uniqueCode])
+  @@index([organizationId])
+  @@map("application_forms")
+}
+
+model ApplicationFormResponse {
+  id                Int       @id @default(autoincrement())
+  organizationId    Int       @default(0) @map("organization_id")
+  formId            Int       @map("lead_form_id")
+  leadId            Int       @default(0) @map("lead_id")
+  sessionId         String?
+  responseJson      Json      @map("response_json")
+  fillPercentage    Int       @default(0) @map("fill_percentage")
+  currentStep       Int       @default(0) @map("current_step")
+  emailVerified     Int       @default(0) @map("email_verified")
+  otpVerified       Int       @default(0) @map("otp_verified")
+  otpCode           String?
+  otpExpiresAt      DateTime? @map("otp_expires_at")
+  paymentAmount     Int       @default(0) @map("payment_amount")
+  paymentMethod     String?   @map("payment_method")
+  paymentStatus     Int       @default(0) @map("payment_status")
+  paymentNeedToTake Int       @default(0) @map("payment_need_to_take")
+  assignedTo        Int       @default(0) @map("assigned_to")
+  /** draft | submitted | paid */
+  status            String?   @default("draft")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  updatedAt         DateTime  @updatedAt @map("updated_at")
+
+  form ApplicationForm @relation(fields: [formId], references: [id], onDelete: Cascade)
+
+  @@index([formId])
+  @@index([organizationId])
+  @@map("application_form_responses")
+}
+
+model LeadApplication {
+  id               Int       @id @default(autoincrement())
+  leadId           Int?      @map("lead_id")
+  applicationForm  Int?      @map("application_form_id")
+  applicationScore Int?      @map("application_score")
+  /** pending | paid | failed */
+  paymentStatus    String?   @default("pending") @map("payment_status")
+  paymentMethod    String?   @map("payment_method")
+  createdAt        DateTime  @default(now()) @map("created_at")
+
+  @@index([leadId])
+  @@map("lead_applications")
 }

@@ -11,6 +11,7 @@ import {
   type SessionUser,
 } from "@/lib/action-utils";
 import { couponApplySchema, couponFormSchema } from "@/lib/validations/coupons";
+import { quoteCoupon, redeemCouponCore, type CouponQuote } from "@/lib/coupons";
 import { prisma } from "@/lib/prisma";
 
 async function requireOrgId(user: SessionUser) {
@@ -130,54 +131,7 @@ export async function deleteCoupon(id: number): Promise<ActionResult> {
  * Preview + redemption (used by application-form payments in a later phase)
  * ------------------------------------------------------------------------- */
 
-export type CouponQuote = {
-  ok: boolean;
-  error?: string;
-  code?: string;
-  discount?: number;
-  payable?: number;
-};
-
-async function quoteCoupon(
-  organizationId: number,
-  code: string,
-  orderAmount: number,
-): Promise<CouponQuote> {
-  const coupon = await prisma.coupon.findFirst({
-    where: { organizationId, code: code.trim().toUpperCase() },
-  });
-  if (!coupon) return { ok: false, error: "Invalid coupon code" };
-  if (coupon.status !== 1) return { ok: false, error: "This coupon is inactive" };
-  const now = new Date();
-  if (coupon.startAt && coupon.startAt > now) {
-    return { ok: false, error: "This coupon is not valid yet" };
-  }
-  if (coupon.endAt && coupon.endAt < now) {
-    return { ok: false, error: "This coupon has expired" };
-  }
-  if (coupon.usageLimit != null && coupon.usedCount >= coupon.usageLimit) {
-    return { ok: false, error: "This coupon has been fully redeemed" };
-  }
-  const minAmount = coupon.minAmount != null ? Number(coupon.minAmount) : null;
-  if (minAmount != null && orderAmount < minAmount) {
-    return { ok: false, error: `Minimum order for this coupon is ₹${minAmount}` };
-  }
-
-  let discount =
-    coupon.type === "percent"
-      ? (orderAmount * Number(coupon.value)) / 100
-      : Number(coupon.value);
-  const maxDiscount = coupon.maxDiscount != null ? Number(coupon.maxDiscount) : null;
-  if (maxDiscount != null) discount = Math.min(discount, maxDiscount);
-  discount = Math.min(Math.round(discount * 100) / 100, orderAmount);
-
-  return {
-    ok: true,
-    code: coupon.code,
-    discount,
-    payable: Math.max(0, Math.round((orderAmount - discount) * 100) / 100),
-  };
-}
+export type { CouponQuote };
 
 /** Server action: live quote for a code + order amount. */
 export async function previewCoupon(values: unknown): Promise<CouponQuote> {
@@ -200,31 +154,15 @@ export async function redeemCoupon(values: unknown): Promise<ActionResult> {
   const organizationId = await requireOrgId(user);
   if (!organizationId) return fail("No organization found.");
 
-  const quote = await quoteCoupon(organizationId, parsed.data.code, parsed.data.orderAmount);
-  if (!quote.ok || quote.discount == null) return fail(quote.error ?? "Invalid coupon");
-
   try {
-    const coupon = await prisma.coupon.findFirst({
-      where: { organizationId, code: parsed.data.code.trim().toUpperCase() },
-      select: { id: true },
+    const quote = await redeemCouponCore({
+      organizationId,
+      code: parsed.data.code,
+      orderAmount: parsed.data.orderAmount,
+      leadId: parsed.data.leadId ?? null,
+      usedByUserId: user.id,
     });
-    if (!coupon) return fail("Invalid coupon code");
-    await prisma.$transaction([
-      prisma.couponUsage.create({
-        data: {
-          organizationId,
-          couponId: coupon.id,
-          leadId: parsed.data.leadId ?? null,
-          usedByUserId: user.id,
-          discountAmount: quote.discount,
-          orderAmount: parsed.data.orderAmount,
-        },
-      }),
-      prisma.coupon.update({
-        where: { id: coupon.id },
-        data: { usedCount: { increment: 1 } },
-      }),
-    ]);
+    if (!quote.ok) return fail(quote.error ?? "Invalid coupon");
     return ok(`Coupon applied — ₹${quote.discount} off`);
   } catch (error) {
     console.error(error);

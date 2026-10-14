@@ -10,7 +10,7 @@ import { prisma } from "@/lib/prisma";
 export const getLeadFormOptions = cache(async (organizationId: number | null) => {
   const scope = organizationId != null ? { organizationId } : {};
 
-  const [statuses, sources, types, institutes, users, campaigns] =
+  const [statuses, sources, types, institutes, users, campaigns, customFields] =
     await Promise.all([
       prisma.leadStatus.findMany({
         where: { ...scope, isActive: true },
@@ -45,9 +45,13 @@ export const getLeadFormOptions = cache(async (organizationId: number | null) =>
         where: scope,
         orderBy: { name: "asc" },
       }),
+      prisma.attribute.findMany({
+        where: { ...scope, entityType: "lead", isActive: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      }),
     ]);
 
-  return { statuses, sources, types, institutes, users, campaigns };
+  return { statuses, sources, types, institutes, users, campaigns, customFields };
 });
 
 export const getRoles = cache(async (organizationId: number | null) => {

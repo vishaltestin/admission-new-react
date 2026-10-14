@@ -43,12 +43,14 @@ into this repo's tech stack: **Next.js 16 (App Router) + React 19 + Prisma 7
 | `WebFormController` (+ attributes) | `/webforms` — list/create + visual builder (fields, masters, theme colors); public capture at `/f/{formId}` (noindex), iframe embed (`?embed=1`), CORS-ready `POST /api/public/forms/{formId}`; view/submit counters + conversion % | ✅ Phase 4A |
 | `LandingPageController` (+ sections) | `/landing-pages` — hero/features/about form editor, campaign link, embedded webform; public indexable page at `/p/{slug}` with view tracking | ✅ Phase 4A |
 | `CouponController` | `/coupons` — flat/percent codes, min order, discount cap, validity window, single/multiple usage + limit; `previewCoupon`/`redeemCoupon` quote+redemption engine w/ `coupon_usages` audit | ✅ Phase 4A |
-| `ApplicationFormController` (OTP, payments, documents) | — | Phase 4B |
-| Custom fields editor (`extra_fields_json`), advanced XLSX imports, PWA, cookie consent | — | Phase 4B |
+| `ApplicationFormController` (OTP, payments) | `/application-forms` — list/editor (fee+tax, allowed institutes/countries), responses w/ manual "mark paid"; public multi-step wizard at `/apply/{uniqueCode}` (noindex) with 6-digit email OTP (SMTP-gated), coupon quoting + redemption, lead dedupe by mobile, `application_form_responses` + `lead_applications` trails | ✅ Phase 4B |
+| Custom fields editor (`extra_fields_json`) | `/masters` → Custom fields tab (8 kinds, options, required/quick-add); rendered in the lead create/edit form (`custom.*` keys), persisted to `leads.extra_fields_json` via server-side validation | ✅ Phase 4B |
+| Advanced XLSX imports | `/leads/import` — .xlsx/.xls/.csv/txt, interactive column mapping w/ auto-suggest + 5-row preview, 2-step flow; duplicate detection by mobile, `lead_uploads` audit | ✅ Phase 4B |
+| Settings + maintenance + PWA | `/settings` — branding, currency/timezone/date formats, payment gateway credentials, maintenance mode (dashboard blocks non-admins with notice); `app/manifest.ts` + `app/icon.svg`, cookie-consent banner in root layout | ✅ Phase 4B |
 
 ## Data model
 
-`prisma/schema.prisma` covers 43 tables ported from the Laravel dump
+`prisma/schema.prisma` covers 47 tables ported from the Laravel dump
 (`db-.sql`), incl. organizations, users/roles (Sentinel-style `role_users`),
 leads with status/sub-status/source/type/campaign/institute/program,
 notes, communication + activity logs, teams, geo masters, templates,
@@ -96,9 +98,15 @@ proxy.ts                   Next.js 16 proxy (auth guard, edge-safe config)
 auth.ts / auth.config.ts   Auth.js: Node config + edge-safe split
 ```
 
-## Phase 4B roadmap
+## Phase 4B (shipped)
 
-1. Application forms (multi-step, OTP verification, payment gateway, documents).
-2. Custom fields editor (`extra_fields_json` per lead).
-3. Advanced imports (XLSX, mapping UI).
-4. PWA manifest, cookie consent, maintenance mode parity with the Laravel app.
+1. ✅ Application forms (multi-step, email OTP verification, coupon-powered fee quoting, manual payment confirmation).
+2. ✅ Custom fields editor (`extra_fields_json` per lead) — 8 attribute kinds, integrated in lead create/edit.
+3. ✅ Advanced imports (.xlsx/.xls plus CSV — interactive column mapping with preview).
+4. ✅ Settings page (branding, payment gateway, maintenance mode), PWA manifest + icon, cookie consent banner.
+
+## Future ideas (beyond source parity)
+
+- Automated payment-gateway capture (Razorpay/Stripe) for application fees.
+- Application document uploads.
+- Bulk messaging campaigns with scheduled sends.

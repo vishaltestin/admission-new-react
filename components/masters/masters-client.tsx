@@ -1265,3 +1265,292 @@ export function ProgramsTab({
     </div>
   );
 }
+
+/* ---------------------------------------------------------------------------
+ * Custom fields (attributes) tab
+ * ------------------------------------------------------------------------- */
+
+import {
+  createAttribute,
+  updateAttribute,
+  deleteAttribute,
+} from "@/lib/actions/attribute-actions";
+import {
+  ATTRIBUTE_KINDS,
+  attributeFormSchema,
+  slugifyCode,
+  type AttributeFormData,
+} from "@/lib/validations/attributes";
+
+export type AttributeRow = {
+  id: number;
+  code: string;
+  name: string;
+  type: string;
+  options: string;
+  isRequired: boolean;
+  isActive: boolean;
+  sortOrder: number;
+};
+
+const attributeDefaults: AttributeFormData = {
+  name: "",
+  code: "",
+  type: "text",
+  options: "",
+  isRequired: false,
+  isActive: true,
+  sortOrder: "0",
+};
+
+export function AttributeDialog({
+  trigger,
+  initial,
+}: {
+  trigger: ReactNode;
+  initial?: AttributeRow;
+}) {
+  const [open, setOpen] = useState(false);
+  const form = useForm<AttributeFormData>({
+    resolver: zodResolver(attributeFormSchema),
+    defaultValues: initial
+      ? {
+          name: initial.name,
+          code: initial.code,
+          type: initial.type as AttributeFormData["type"],
+          options: initial.options,
+          isRequired: initial.isRequired,
+          isActive: initial.isActive,
+          sortOrder: String(initial.sortOrder),
+        }
+      : attributeDefaults,
+  });
+
+  useEffect(() => {
+    if (open)
+      form.reset(
+        initial
+          ? {
+              name: initial.name,
+              code: initial.code,
+              type: initial.type as AttributeFormData["type"],
+              options: initial.options,
+              isRequired: initial.isRequired,
+              isActive: initial.isActive,
+              sortOrder: String(initial.sortOrder),
+            }
+          : attributeDefaults,
+      );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial]);
+
+  const { pending, submit } = useCrudSubmit<AttributeFormData>({
+    form,
+    close: () => setOpen(false),
+    action: (values) =>
+      initial ? updateAttribute(initial.id, values) : createAttribute(values),
+  });
+
+  const kind = form.watch("type");
+  const needsOptions = ["select", "radio", "checkbox"].includes(kind);
+
+  return (
+    <CrudDialog
+      trigger={trigger}
+      open={open}
+      setOpen={setOpen}
+      title={initial ? `Edit ${initial.name}` : "Add custom field"}
+      description="Custom fields appear on the lead form and are stored in the lead's extra data."
+    >
+      <Form {...form}>
+        <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              control={form.control}
+              name="name"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Label</FormLabel>
+                  <FormControl>
+                    <Input
+                      placeholder="Passport number"
+                      {...field}
+                      onChange={(event) => {
+                        field.onChange(event);
+                        if (!initial) {
+                          form.setValue("code", slugifyCode(event.target.value));
+                        }
+                      }}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="code"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Storage key</FormLabel>
+                  <FormControl>
+                    <Input placeholder="passport_number" disabled={!!initial} {...field} />
+                  </FormControl>
+                  {initial ? (
+                    <FormDescription>
+                      Keys can&apos;t change — stored values would be orphaned.
+                    </FormDescription>
+                  ) : null}
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="type"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Field type</FormLabel>
+                  <Select value={field.value} onValueChange={field.onChange}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {ATTRIBUTE_KINDS.map((kindName) => (
+                        <SelectItem key={kindName} value={kindName}>
+                          {kindName}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            {needsOptions ? (
+              <FormField
+                control={form.control}
+                name="options"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Options (comma separated)</FormLabel>
+                    <FormControl>
+                      <Input placeholder="Day scholar, Hosteller, Distance" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            ) : (
+              <></>
+            )}
+            <FormField
+              control={form.control}
+              name="sortOrder"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Sort order</FormLabel>
+                  <FormControl>
+                    <Input inputMode="numeric" {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+          <SwitchFormField form={form} name="isRequired" label="Required on lead forms" />
+          <SwitchFormField form={form} name="isActive" label="Active" />
+          <DialogFooter>
+            <SubmitButton pending={pending}>
+              {initial ? "Save changes" : "Create field"}
+            </SubmitButton>
+          </DialogFooter>
+        </form>
+      </Form>
+    </CrudDialog>
+  );
+}
+
+export function AttributesTab({ rows }: { rows: AttributeRow[] }) {
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <p className="text-sm text-muted-foreground">
+          Custom fields show up on lead create/edit forms; values are stored in the lead&apos;s extra data.
+        </p>
+        <AttributeDialog
+          trigger={
+            <Button size="sm">
+              <Plus />
+              Add field
+            </Button>
+          }
+        />
+      </div>
+      <div className="rounded-lg border">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Label</TableHead>
+              <TableHead>Key</TableHead>
+              <TableHead>Type</TableHead>
+              <TableHead>Required</TableHead>
+              <TableHead>State</TableHead>
+              <TableHead className="w-24" />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.length === 0 ? (
+              <EmptyRow colSpan={6} message="No custom fields yet." />
+            ) : (
+              rows.map((row) => (
+                <TableRow key={row.id}>
+                  <TableCell className="font-medium">{row.name}</TableCell>
+                  <TableCell className="font-mono text-xs">{row.code}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline">{row.type}</Badge>
+                    {row.options ? (
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {row.options.split(",").length} options
+                      </span>
+                    ) : null}
+                  </TableCell>
+                  <TableCell>
+                    {row.isRequired ? <Badge>Required</Badge> : <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    <ActiveCell active={row.isActive} />
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center justify-end gap-1">
+                      <AttributeDialog
+                        initial={row}
+                        trigger={
+                          <Button variant="ghost" size="icon-xs" aria-label="Edit">
+                            <Pencil />
+                          </Button>
+                        }
+                      />
+                      <ConfirmDialog
+                        trigger={
+                          <Button variant="ghost" size="icon-xs" aria-label="Delete">
+                            <Trash2 className="text-destructive" />
+                          </Button>
+                        }
+                        title={`Delete field "${row.name}"?`}
+                        description="Existing values stay on the leads but the field stops appearing on forms."
+                        action={() => deleteAttribute(row.id)}
+                      />
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
+    </div>
+  );
+}

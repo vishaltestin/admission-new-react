@@ -2,12 +2,14 @@ import type { Metadata } from "next";
 
 import { auth } from "@/auth";
 import {
+  AttributesTab,
   InstitutesTab,
   ProgramsTab,
   SourcesTab,
   StatusesTab,
   SubStatusesTab,
   TypesTab,
+  type AttributeRow,
   type InstituteRow,
   type ProgramRow,
   type SourceRow,
@@ -26,7 +28,7 @@ export default async function MastersPage() {
   const organizationId = session?.user?.organizationId ?? null;
   const scope = organizationId != null ? { organizationId } : {};
 
-  const [statuses, subStatuses, sources, types, institutes, programs] =
+  const [statuses, subStatuses, sources, types, institutes, programs, attributes] =
     await Promise.all([
       prisma.leadStatus.findMany({
         where: scope,
@@ -53,6 +55,10 @@ export default async function MastersPage() {
       prisma.program.findMany({
         orderBy: { name: "asc" },
         include: { institute: true },
+      }),
+      prisma.attribute.findMany({
+        where: { ...scope, entityType: "lead" },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
       }),
     ]);
 
@@ -110,6 +116,17 @@ export default async function MastersPage() {
   const statusOptions = statuses.map((s) => ({ id: s.id, name: s.name }));
   const instituteOptions = institutes.map((i) => ({ id: i.id, name: i.name }));
 
+  const attributeRows: AttributeRow[] = attributes.map((a) => ({
+    id: a.id,
+    code: a.code,
+    name: a.name,
+    type: a.type,
+    options: a.options ?? "",
+    isRequired: a.isRequired,
+    isActive: a.isActive,
+    sortOrder: a.sortOrder,
+  }));
+
   return (
     <>
       <PageHeader
@@ -125,6 +142,7 @@ export default async function MastersPage() {
           <TabsTrigger value="types">Types</TabsTrigger>
           <TabsTrigger value="institutes">Institutes</TabsTrigger>
           <TabsTrigger value="programs">Programs</TabsTrigger>
+          <TabsTrigger value="custom-fields">Custom fields</TabsTrigger>
         </TabsList>
 
         <TabsContent value="statuses" className="mt-4">
@@ -144,6 +162,9 @@ export default async function MastersPage() {
         </TabsContent>
         <TabsContent value="programs" className="mt-4">
           <ProgramsTab rows={programRows} institutes={instituteOptions} />
+        </TabsContent>
+        <TabsContent value="custom-fields" className="mt-4">
+          <AttributesTab rows={attributeRows} />
         </TabsContent>
       </Tabs>
     </>

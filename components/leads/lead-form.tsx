@@ -40,6 +40,14 @@ export type SelectOption = { id: number; name: string };
 export type StatusOption = SelectOption & { subStatuses: SelectOption[] };
 export type InstituteOption = SelectOption & { programs: SelectOption[] };
 
+export type CustomFieldDef = {
+  code: string;
+  name: string;
+  type: string;
+  options: string | null;
+  isRequired: boolean;
+};
+
 export type LeadFormOptionsData = {
   statuses: StatusOption[];
   sources: SelectOption[];
@@ -47,6 +55,7 @@ export type LeadFormOptionsData = {
   institutes: InstituteOption[];
   users: SelectOption[];
   campaigns: SelectOption[];
+  customFields: CustomFieldDef[];
 };
 
 export const emptyLeadFormValues: LeadFormData = {
@@ -102,6 +111,21 @@ export function LeadForm({
   }, [options.institutes, watchInstitute]);
 
   function onSubmit(values: LeadFormData) {
+    // Required custom fields: validate before hitting the server.
+    let firstMissing: string | null = null;
+    for (const def of options.customFields) {
+      if (!def.isRequired) continue;
+      const value = values.custom?.[def.code] ?? "";
+      if (!value.trim()) {
+        form.setError(`custom.${def.code}`, { message: `${def.name} is required` });
+        firstMissing = firstMissing ?? def.name;
+      }
+    }
+    if (firstMissing) {
+      toast.error(`"${firstMissing}" is required`);
+      return;
+    }
+
     startTransition(async () => {
       const result = leadId
         ? await updateLead(leadId, values)
@@ -530,6 +554,89 @@ export function LeadForm({
                   </FormItem>
                 )}
               />
+            </CardContent>
+          </Card>
+        ) : null}
+
+        {options.customFields.length > 0 ? (
+          <Card>
+            <CardHeader>
+              <CardTitle>Additional details</CardTitle>
+              <CardDescription>
+                Custom fields configured under Masters → Custom fields.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="grid gap-4 sm:grid-cols-2">
+              {options.customFields.map((def) => {
+                const name = `custom.${def.code}` as const;
+                const error = (form.formState.errors.custom as
+                  | Record<string, { message?: string }>
+                  | undefined)?.[def.code]?.message;
+                const opts = (def.options ?? "")
+                  .split(",")
+                  .map((option) => option.trim())
+                  .filter(Boolean);
+
+                return (
+                  <div key={def.code} className={def.type === "textarea" ? "sm:col-span-2" : undefined}>
+                    <label className="mb-1 block text-sm font-medium">
+                      {def.name}
+                      {def.isRequired ? <span className="text-destructive"> *</span> : null}
+                    </label>
+                    {def.type === "textarea" ? (
+                      <Textarea rows={3} {...form.register(name)} />
+                    ) : def.type === "select" ? (
+                      <Select
+                        value={form.watch(name) ?? ""}
+                        onValueChange={(v) => form.setValue(name, v === "__none" ? "" : v, { shouldValidate: true })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="__none">Not set</SelectItem>
+                          {opts.map((option) => (
+                            <SelectItem key={option} value={option}>
+                              {option}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : def.type === "radio" ? (
+                      <div className="flex flex-wrap gap-3 pt-1">
+                        {opts.map((option) => (
+                          <label key={option} className="flex items-center gap-1.5 text-sm">
+                            <input
+                              type="radio"
+                              value={option}
+                              checked={form.watch(name) === option}
+                              onChange={() => form.setValue(name, option, { shouldValidate: true })}
+                            />
+                            {option}
+                          </label>
+                        ))}
+                      </div>
+                    ) : def.type === "checkbox" ? (
+                      <label className="flex items-center gap-2 text-sm pt-1">
+                        <input
+                          type="checkbox"
+                          checked={form.watch(name) === "1"}
+                          onChange={(event) =>
+                            form.setValue(name, event.target.checked ? "1" : "", { shouldValidate: true })
+                          }
+                        />
+                        Yes
+                      </label>
+                    ) : (
+                      <Input
+                        type={["text", "number", "email", "date"].includes(def.type) ? def.type : "text"}
+                        {...form.register(name)}
+                      />
+                    )}
+                    {error ? <p className="mt-1 text-xs text-destructive">{error}</p> : null}
+                  </div>
+                );
+              })}
             </CardContent>
           </Card>
         ) : null}
