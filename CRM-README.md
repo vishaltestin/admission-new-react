@@ -40,19 +40,24 @@ into this repo's tech stack: **Next.js 16 (App Router) + React 19 + Prisma 7
 | `AutomationRuleController` + `RunLeadAutomations` | `/automation` + `lib/automation/engine.ts` (conditions + ordered actions incl. fire_webhook; status-change actions write directly — no recursion), `automation_rule_logs` audit | ✅ Phase 3 |
 | Email/SMS/WhatsApp send flows | "Send message" dialog on `/leads/[id]` → `lib/messaging.ts` (template `{{variable}}` render, SMTP via nodemailer + `email_settings` — otherwise queued; logs to `email_logs`/`sms_logs`/`whatsapp_logs`) | ✅ Phase 3 |
 | Laravel `MailSettingController` | Integrations → "Email (SMTP)" tab | ✅ Phase 3 |
-| `WebFormController`, `LandingPageController`, `ApplicationFormController` | — | Phase 4 |
-| Coupons (`CouponController`), documents, PWA, cookie consent | — | Phase 4 |
+| `WebFormController` (+ attributes) | `/webforms` — list/create + visual builder (fields, masters, theme colors); public capture at `/f/{formId}` (noindex), iframe embed (`?embed=1`), CORS-ready `POST /api/public/forms/{formId}`; view/submit counters + conversion % | ✅ Phase 4A |
+| `LandingPageController` (+ sections) | `/landing-pages` — hero/features/about form editor, campaign link, embedded webform; public indexable page at `/p/{slug}` with view tracking | ✅ Phase 4A |
+| `CouponController` | `/coupons` — flat/percent codes, min order, discount cap, validity window, single/multiple usage + limit; `previewCoupon`/`redeemCoupon` quote+redemption engine w/ `coupon_usages` audit | ✅ Phase 4A |
+| `ApplicationFormController` (OTP, payments, documents) | — | Phase 4B |
+| Custom fields editor (`extra_fields_json`), advanced XLSX imports, PWA, cookie consent | — | Phase 4B |
 
 ## Data model
 
-`prisma/schema.prisma` covers 37 tables ported from the Laravel dump
+`prisma/schema.prisma` covers 43 tables ported from the Laravel dump
 (`db-.sql`), incl. organizations, users/roles (Sentinel-style `role_users`),
 leads with status/sub-status/source/type/campaign/institute/program,
 notes, communication + activity logs, teams, geo masters, templates,
-`lead_uploads`, integrations and `lead_webhook_logs`, plus Phase-3
+`lead_uploads`, integrations and `lead_webhook_logs`; Phase-3
 (`20251014150000_phase3`): `webhooks`, `automation_rules` +
 `automation_rule_logs`, `email_logs`/`sms_logs`/`whatsapp_logs`,
-`email_settings` (SMTP per organization).
+`email_settings`; Phase-4A (`20251014180000_phase4a`): `web_forms` +
+`web_form_attributes`, `landing_pages` + `landing_page_sections`,
+`coupons` + `coupon_usages`.
 
 Passwords are **bcrypt** — compatible with hashes produced by
 Laravel's `Hash::make`, so existing rows from the old `users` table can be
@@ -91,10 +96,9 @@ proxy.ts                   Next.js 16 proxy (auth guard, edge-safe config)
 auth.ts / auth.config.ts   Auth.js: Node config + edge-safe split
 ```
 
-## Phase 4 roadmap
+## Phase 4B roadmap
 
-1. Webforms + landing pages + application forms (public capture pages).
+1. Application forms (multi-step, OTP verification, payment gateway, documents).
 2. Custom fields editor (`extra_fields_json` per lead).
 3. Advanced imports (XLSX, mapping UI).
-4. Coupons, document checklist, PWA manifest, cookie consent, maintenance mode
-   parity with the Laravel app.
+4. PWA manifest, cookie consent, maintenance mode parity with the Laravel app.

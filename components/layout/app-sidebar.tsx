@@ -5,13 +5,16 @@ import { usePathname } from "next/navigation";
 import {
   BarChart3,
   Building2,
+  FormInput,
   Kanban,
   LayoutDashboard,
+  LayoutTemplate,
   Mail,
   Megaphone,
   Plug,
   ShieldCheck,
   SlidersHorizontal,
+  Ticket,
   Upload,
   Users,
   UsersRound,
@@ -63,7 +66,10 @@ const navGroups: {
     items: [
       { title: "Campaigns", url: "/campaigns", icon: Megaphone },
       { title: "Templates", url: "/templates", icon: Mail },
+      { title: "Webforms", url: "/webforms", icon: FormInput },
+      { title: "Landing Pages", url: "/landing-pages", icon: LayoutTemplate },
       { title: "Automation", url: "/automation", icon: Zap },
+      { title: "Coupons", url: "/coupons", icon: Ticket },
     ],
   },
   {

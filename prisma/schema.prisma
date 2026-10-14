@@ -32,45 +32,48 @@ model Organization {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  users           User[]
-  roles           Role[]
-  leads           Lead[]
-  leadStatuses    LeadStatus[]
-  leadSubStatuses LeadSubStatus[]
-  leadSources     LeadSource[]
-  leadTypes       LeadType[]
-  institutes      Institute[]
-  teams           Team[]
-  designations    Designation[]
-  campaigns       Campaign[]
-  marketingEvents MarketingEvent[]
-  generalSetting  GeneralSetting?
-  emailTemplates  EmailTemplate[]
-  messageTemplates MessageTemplate[]
+  users             User[]
+  roles             Role[]
+  leads             Lead[]
+  leadStatuses      LeadStatus[]
+  leadSubStatuses   LeadSubStatus[]
+  leadSources       LeadSource[]
+  leadTypes         LeadType[]
+  institutes        Institute[]
+  teams             Team[]
+  designations      Designation[]
+  campaigns         Campaign[]
+  marketingEvents   MarketingEvent[]
+  generalSetting    GeneralSetting?
+  emailTemplates    EmailTemplate[]
+  messageTemplates  MessageTemplate[]
   whatsappTemplates WhatsappTemplate[]
-  leadUploads     LeadUpload[]
-  leadIntegrations LeadIntegration[]
-  webhooks        Webhook[]
-  automationRules AutomationRule[]
+  leadUploads       LeadUpload[]
+  leadIntegrations  LeadIntegration[]
+  webhooks          Webhook[]
+  automationRules   AutomationRule[]
+  webForms          WebForm[]
+  landingPages      LandingPage[]
+  coupons           Coupon[]
 
   @@map("organizations")
 }
 
 model User {
-  id            Int       @id @default(autoincrement())
-  email         String    @unique
-  password      String
-  permissions   Json?
-  lastLogin     DateTime? @map("last_login")
-  firstName     String?   @map("first_name")
-  lastName      String?   @map("last_name")
-  location      String?
-  status        Int       @default(1)
-  organizationId Int?     @map("organization_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  id             Int       @id @default(autoincrement())
+  email          String    @unique
+  password       String
+  permissions    Json?
+  lastLogin      DateTime? @map("last_login")
+  firstName      String?   @map("first_name")
+  lastName       String?   @map("last_name")
+  location       String?
+  status         Int       @default(1)
+  organizationId Int?      @map("organization_id")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
 
-  organization  Organization? @relation(fields: [organizationId], references: [id])
+  organization  Organization?     @relation(fields: [organizationId], references: [id])
   roles         RoleUser[]
   teamMembers   TeamMember[]
   assignedLeads Lead[]            @relation("LeadAssignee")
@@ -83,13 +86,13 @@ model User {
 }
 
 model Role {
-  id            Int       @id @default(autoincrement())
-  slug          String    @unique
-  name          String
-  permissions   Json?
+  id             Int      @id @default(autoincrement())
+  slug           String   @unique
+  name           String
+  permissions    Json?
   organizationId Int?     @map("organization_id")
-  createdAt     DateTime  @default(now()) @map("created_at")
-  updatedAt     DateTime  @updatedAt @map("updated_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
 
   organization Organization? @relation(fields: [organizationId], references: [id])
   users        RoleUser[]
@@ -124,9 +127,9 @@ model LeadStatus {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization  Organization?   @relation(fields: [organizationId], references: [id])
-  subStatuses   LeadSubStatus[]
-  leads         Lead[]
+  organization Organization?   @relation(fields: [organizationId], references: [id])
+  subStatuses  LeadSubStatus[]
+  leads        Lead[]
 
   @@map("lead_statuses")
 }
@@ -161,6 +164,7 @@ model LeadSource {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   leads        Lead[]
+  webForms     WebForm[]
 
   @@map("lead_sources")
 }
@@ -175,6 +179,7 @@ model LeadType {
 
   organization Organization @relation(fields: [organizationId], references: [id])
   leads        Lead[]
+  webForms     WebForm[]
 
   @@map("lead_types")
 }
@@ -232,6 +237,7 @@ model Campaign {
   organization   Organization    @relation(fields: [organizationId], references: [id])
   marketingEvent MarketingEvent? @relation(fields: [marketingEventId], references: [id])
   leads          Lead[]
+  webForms       WebForm[]
 
   @@map("campaigns")
 }
@@ -283,17 +289,17 @@ model Lead {
   createdAt            DateTime  @default(now()) @map("created_at")
   updatedAt            DateTime  @updatedAt @map("updated_at")
 
-  organization Organization           @relation(fields: [organizationId], references: [id])
-  institute    Institute?             @relation(fields: [instituteId], references: [id])
-  programme    Program?               @relation(fields: [programmeId], references: [id])
-  source       LeadSource?            @relation(fields: [leadSourceId], references: [id])
-  campaign     Campaign?              @relation(fields: [campaignId], references: [id])
-  type         LeadType?              @relation(fields: [typeId], references: [id])
-  status       LeadStatus?            @relation(fields: [leadStatusId], references: [id])
-  subStatus    LeadSubStatus?         @relation(fields: [leadSubStatusId], references: [id])
-  assignee     User?                  @relation("LeadAssignee", fields: [leadAssignTo], references: [id])
-  creator      User?                  @relation("LeadCreator", fields: [createdBy], references: [id])
-  notes        LeadNote[]
+  organization   Organization           @relation(fields: [organizationId], references: [id])
+  institute      Institute?             @relation(fields: [instituteId], references: [id])
+  programme      Program?               @relation(fields: [programmeId], references: [id])
+  source         LeadSource?            @relation(fields: [leadSourceId], references: [id])
+  campaign       Campaign?              @relation(fields: [campaignId], references: [id])
+  type           LeadType?              @relation(fields: [typeId], references: [id])
+  status         LeadStatus?            @relation(fields: [leadStatusId], references: [id])
+  subStatus      LeadSubStatus?         @relation(fields: [leadSubStatusId], references: [id])
+  assignee       User?                  @relation("LeadAssignee", fields: [leadAssignTo], references: [id])
+  creator        User?                  @relation("LeadCreator", fields: [createdBy], references: [id])
+  notes          LeadNote[]
   communications LeadCommunicationLog[]
   activityLogs   LeadActivityLog[]
 
@@ -321,12 +327,12 @@ model LeadNote {
 }
 
 model LeadCommunicationLog {
-  id        Int       @id @default(autoincrement())
-  leadId    Int?      @map("lead_id")
-  channel   String    // email | sms | whatsapp | call | system
-  direction String?   // inbound | outbound
+  id        Int      @id @default(autoincrement())
+  leadId    Int?     @map("lead_id")
+  channel   String // email | sms | whatsapp | call | system
+  direction String? // inbound | outbound
   purpose   String?
-  createdAt DateTime  @default(now()) @map("created_at")
+  createdAt DateTime @default(now()) @map("created_at")
 
   lead Lead? @relation(fields: [leadId], references: [id])
 
@@ -416,17 +422,17 @@ model GeneralSetting {
 }
 
 model Country {
-  id        Int     @id @default(autoincrement())
-  name      String?
-  code      Int?
-  states    State[]
+  id     Int     @id @default(autoincrement())
+  name   String?
+  code   Int?
+  states State[]
 
   @@map("countries")
 }
 
 model State {
-  id        Int    @id @default(autoincrement())
-  countryId Int    @default(0) @map("country_id")
+  id        Int     @id @default(autoincrement())
+  countryId Int     @default(0) @map("country_id")
   name      String?
   country   Country @relation(fields: [countryId], references: [id], onDelete: Cascade)
   cities    City[]
@@ -522,7 +528,7 @@ model LeadUpload {
   duplicateRows  Int       @default(0) @map("duplicate_rows")
   failedRows     Int       @default(0) @map("failed_rows")
   status         String    @default("pending") // pending | processing | completed | partial | failed
-  errorMessage   String?   @db.Text @map("error_message")
+  errorMessage   String?   @map("error_message") @db.Text
   uploadType     String?   @map("upload_type")
   startedAt      DateTime? @map("started_at")
   completedAt    DateTime? @map("completed_at")
@@ -542,7 +548,7 @@ model LeadUpload {
 model LeadIntegration {
   id             Int      @id @default(autoincrement())
   organizationId Int      @map("organization_id")
-  provider       String   // facebook | instagram | google
+  provider       String // facebook | instagram | google
   isEnabled      Boolean  @default(false) @map("is_enabled")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
@@ -574,7 +580,7 @@ model LeadWebhookLog {
   requestHeaders Json?    @map("request_headers")
   payload        Json
   isProcessed    Boolean  @default(false) @map("is_processed")
-  errorMessage   String?  @db.Text @map("error_message")
+  errorMessage   String?  @map("error_message") @db.Text
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("lead_webhook_logs")
@@ -621,7 +627,7 @@ model AutomationRule {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  organization Organization?      @relation(fields: [organizationId], references: [id])
+  organization Organization?       @relation(fields: [organizationId], references: [id])
   logs         AutomationRuleLog[]
 
   @@map("automation_rules")
@@ -659,7 +665,7 @@ model EmailLog {
   subject            String?
   body               String?   @db.LongText
   status             String?
-  responseMessage    String?   @db.Text @map("response_message")
+  responseMessage    String?   @map("response_message") @db.Text
   provider           String?
   sentBy             Int?      @map("sent_by")
   attempts           Int       @default(0)
@@ -682,9 +688,9 @@ model SmsLog {
   provider           String?   @default("demo")
   providerMessageId  String?   @map("provider_message_id")
   status             String?   @default("pending")
-  responseJson       String?   @db.Text @map("response_json")
+  responseJson       String?   @map("response_json") @db.Text
   sentBy             Int?      @map("sent_by")
-  fullUrl            String?   @db.Text @map("full_url")
+  fullUrl            String?   @map("full_url") @db.Text
   attempts           Int       @default(0)
   sentAt             DateTime? @map("sent_at")
   lastAttemptAt      DateTime? @map("last_attempt_at")
@@ -702,11 +708,11 @@ model WhatsappLog {
   mobile             String?
   templateId         String?   @map("template_id")
   message            String?   @db.Text
-  mediaUrl           String?   @db.Text @map("media_url")
+  mediaUrl           String?   @map("media_url") @db.Text
   provider           String?   @default("demo")
   providerMessageId  String?   @map("provider_message_id")
   status             String?   @default("pending")
-  responseJson       String?   @db.Text @map("response_json")
+  responseJson       String?   @map("response_json") @db.Text
   sentBy             Int?      @map("sent_by")
   attempts           Int       @default(0)
   sentAt             DateTime? @map("sent_at")
@@ -718,20 +724,181 @@ model WhatsappLog {
 }
 
 model EmailSetting {
-  id               Int      @id @default(autoincrement())
-  organizationId   Int?     @unique @map("organization_id")
-  mailMailer       String?  @map("mail_mailer")
-  mailHost         String?  @map("mail_host")
-  mailPort         String?  @map("mail_port")
-  mailUsername     String?  @map("mail_username")
-  mailPassword     String?  @map("mail_password")
-  mailEncryption   String?  @map("mail_encryption")
-  mailFromAddress  String?  @map("mail_from_address")
-  mailFromName     String?  @map("mail_from_name")
-  mailValidateSsl  Int      @default(0) @map("mail_validatessl")
-  status           Int      @default(1)
-  createdAt        DateTime @default(now()) @map("created_at")
-  updatedAt        DateTime @updatedAt @map("updated_at")
+  id              Int      @id @default(autoincrement())
+  organizationId  Int?     @unique @map("organization_id")
+  mailMailer      String?  @map("mail_mailer")
+  mailHost        String?  @map("mail_host")
+  mailPort        String?  @map("mail_port")
+  mailUsername    String?  @map("mail_username")
+  mailPassword    String?  @map("mail_password")
+  mailEncryption  String?  @map("mail_encryption")
+  mailFromAddress String?  @map("mail_from_address")
+  mailFromName    String?  @map("mail_from_name")
+  mailValidateSsl Int      @default(0) @map("mail_validatessl")
+  status          Int      @default(1)
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
 
   @@map("email_settings")
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 — Capture: webforms, landing pages, coupons
+// ---------------------------------------------------------------------------
+
+model WebForm {
+  id                    Int      @id @default(autoincrement())
+  organizationId        Int      @default(0) @map("organization_id")
+  /**
+   * Public slug used in /f/{formId} URLs.
+   */
+  formId                String   @map("form_id")
+  title                 String
+  description           String?
+  submitButtonLabel     String   @default("Submit") @map("submit_button_label")
+  /**
+   * message | redirect
+   */
+  submitSuccessAction   String   @default("message") @map("submit_success_action")
+  submitSuccessContent  String?  @map("submit_success_content")
+  createLead            Boolean  @default(true) @map("create_lead")
+  backgroundColor       String?  @map("background_color")
+  formBackgroundColor   String?  @map("form_background_color")
+  formTitleColor        String?  @map("form_title_color")
+  formSubmitButtonColor String?  @map("form_submit_button_color")
+  attributeLabelColor   String?  @map("attribute_label_color")
+  viewCount             Int      @default(0) @map("view_count")
+  submitCount           Int      @default(0) @map("submit_count")
+  leadSourceId          Int?     @map("lead_source_id")
+  campaignId            Int?     @map("lead_campaign_id")
+  typeId                Int?     @map("type_id")
+  applicationFormId     Int?     @map("application_form_id")
+  extraFields           Json?    @map("extra_fields_json")
+  createdBy             Int?     @map("created_by")
+  createdAt             DateTime @default(now()) @map("created_at")
+  updatedAt             DateTime @updatedAt @map("updated_at")
+
+  organization Organization       @relation(fields: [organizationId], references: [id])
+  source       LeadSource?        @relation(fields: [leadSourceId], references: [id])
+  campaign     Campaign?          @relation(fields: [campaignId], references: [id])
+  type         LeadType?          @relation(fields: [typeId], references: [id])
+  attributes   WebFormAttribute[]
+
+  @@unique([organizationId, formId])
+  @@index([organizationId])
+  @@map("web_forms")
+}
+
+model WebFormAttribute {
+  id           Int      @id @default(autoincrement())
+  webFormId    Int      @map("web_form_id")
+  name         String
+  placeholder  String?
+  isRequired   Boolean  @default(false) @map("is_required")
+  isHidden     Boolean  @default(false) @map("is_hidden")
+  sortOrder    Int      @default(0) @map("sort_order")
+  /**
+   * text | email | number | tel | date | textarea | select | checkbox | radio
+   */
+  type         String   @default("text")
+  /**
+   * Comma separated options for select/radio/checkbox.
+   */
+  options      String?
+  defaultValue String?  @map("default_value")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  webForm WebForm @relation(fields: [webFormId], references: [id], onDelete: Cascade)
+
+  @@index([webFormId])
+  @@map("web_form_attributes")
+}
+
+model LandingPage {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @default(0) @map("organization_id")
+  campaignId     Int?     @map("campaign_id")
+  slug           String
+  title          String?
+  layoutName     String   @default("velzon") @map("layout_name")
+  status         Int      @default(1)
+  meta           Json?
+  viewCount      Int      @default(0) @map("view_count")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization         @relation(fields: [organizationId], references: [id])
+  sections     LandingPageSection[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId])
+  @@map("landing_pages")
+}
+
+model LandingPageSection {
+  id          Int      @id @default(autoincrement())
+  pageId      Int      @map("page_id")
+  sectionKey  String   @map("section_key") // hero | features | about | form
+  contentJson Json     @map("content_json")
+  sortOrder   Int      @default(0) @map("sort_order")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  page LandingPage @relation(fields: [pageId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, sectionKey])
+  @@map("landing_page_sections")
+}
+
+model Coupon {
+  id             Int       @id @default(autoincrement())
+  organizationId Int       @map("organization_id")
+  code           String
+  name           String?
+  /**
+   * flat | percent
+   */
+  type           String    @default("flat")
+  value          Decimal   @default(0) @db.Decimal(10, 2)
+  minAmount      Decimal?  @map("min_amount") @db.Decimal(10, 2)
+  maxDiscount    Decimal?  @map("max_discount") @db.Decimal(10, 2)
+  /**
+   * single | multiple
+   */
+  usageType      String    @default("single") @map("usage_type")
+  usageLimit     Int?      @map("usage_limit")
+  usedCount      Int       @default(0) @map("used_count")
+  startAt        DateTime? @map("start_at")
+  endAt          DateTime? @map("end_at")
+  status         Int       @default(1)
+  createdBy      Int?      @map("created_by")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization  @relation(fields: [organizationId], references: [id])
+  usages       CouponUsage[]
+
+  @@unique([organizationId, code])
+  @@map("coupons")
+}
+
+model CouponUsage {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  couponId       Int      @map("coupon_id")
+  leadId         Int?     @map("lead_id")
+  applicationId  Int?     @map("application_id")
+  usedByUserId   Int?     @map("used_by_user_id")
+  usedAt         DateTime @default(now()) @map("used_at")
+  discountAmount Decimal  @default(0) @map("discount_amount") @db.Decimal(10, 2)
+  orderAmount    Decimal  @default(0) @map("order_amount") @db.Decimal(10, 2)
+  metaJson       Json?    @map("meta_json")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  coupon Coupon @relation(fields: [couponId], references: [id], onDelete: Cascade)
+
+  @@index([couponId])
+  @@index([organizationId])
+  @@map("coupon_usages")
 }

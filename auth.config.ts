@@ -20,11 +20,15 @@ export const authConfig = {
       const path = nextUrl.pathname;
 
       const isAuthRoute = path.startsWith("/api/auth");
-      // Inbound provider webhooks authenticate with their own tokens.
-      const isPublicApi = path.startsWith("/api/integrations");
+      // Inbound provider webhooks authenticate with their own tokens;
+      // /api/public serves cross-origin webform embeds.
+      const isPublicApi =
+        path.startsWith("/api/integrations") || path.startsWith("/api/public");
+      // Public capture pages: webforms and landing pages.
+      const isPublicPage = path.startsWith("/f/") || path.startsWith("/p/");
       const isLoginPage = path === "/login";
 
-      if (isAuthRoute || isPublicApi) return true;
+      if (isAuthRoute || isPublicApi || isPublicPage) return true;
 
       if (isLoginPage) {
         // Already logged-in users should not see the login page.
