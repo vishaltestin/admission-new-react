@@ -4,9 +4,13 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   Building2,
+  Kanban,
   LayoutDashboard,
+  Mail,
+  Megaphone,
   ShieldCheck,
   SlidersHorizontal,
+  Upload,
   Users,
   UsersRound,
 } from "lucide-react";
@@ -45,7 +49,18 @@ const navGroups: {
   },
   {
     label: "CRM",
-    items: [{ title: "Leads", url: "/leads", icon: UsersRound }],
+    items: [
+      { title: "Leads", url: "/leads", icon: UsersRound, exact: true },
+      { title: "Pipeline", url: "/leads/pipeline", icon: Kanban },
+      { title: "Import Leads", url: "/leads/import", icon: Upload },
+    ],
+  },
+  {
+    label: "Marketing",
+    items: [
+      { title: "Campaigns", url: "/campaigns", icon: Megaphone },
+      { title: "Templates", url: "/templates", icon: Mail },
+    ],
   },
   {
     label: "Masters",
@@ -56,6 +71,7 @@ const navGroups: {
     items: [
       { title: "Users", url: "/users", icon: Users },
       { title: "Roles", url: "/roles", icon: ShieldCheck },
+      { title: "Teams", url: "/teams", icon: Building2 },
     ],
   },
 ];

@@ -45,6 +45,11 @@ model Organization {
   campaigns       Campaign[]
   marketingEvents MarketingEvent[]
   generalSetting  GeneralSetting?
+  emailTemplates  EmailTemplate[]
+  messageTemplates MessageTemplate[]
+  whatsappTemplates WhatsappTemplate[]
+  leadUploads     LeadUpload[]
+  leadIntegrations LeadIntegration[]
 
   @@map("organizations")
 }
@@ -70,6 +75,7 @@ model User {
   createdLeads  Lead[]            @relation("LeadCreator")
   leadNotes     LeadNote[]
   activityLogs  LeadActivityLog[]
+  leadUploads   LeadUpload[]
 
   @@map("users")
 }
@@ -433,4 +439,141 @@ model City {
   state   State  @relation(fields: [stateId], references: [id], onDelete: Cascade)
 
   @@map("cities")
+}
+
+// ---------------------------------------------------------------------------
+// Templates (email / sms / whatsapp)
+// ---------------------------------------------------------------------------
+
+model EmailTemplate {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  createdBy      Int      @default(0) @map("created_by")
+  sendBy         String?  @map("send_by")
+  title          String?
+  category       String?
+  subject        String?
+  message        String   @db.LongText
+  variables      Json?    @map("variables_json")
+  editable       Boolean  @default(true)
+  sentCount      Int      @default(0) @map("sent_count")
+  status         String   @default("active") // active | inactive
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("email_templates")
+}
+
+model MessageTemplate {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  createdBy      Int      @default(0) @map("created_by")
+  sendBy         String?  @map("send_by")
+  title          String?
+  category       String?
+  message        String   @db.LongText
+  variables      Json?    @map("variables_json")
+  editable       Boolean  @default(true)
+  sentCount      Int      @default(0) @map("sent_count")
+  status         String   @default("active") // active | inactive
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("message_templates")
+}
+
+model WhatsappTemplate {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  createdBy      Int      @default(0) @map("created_by")
+  sendBy         String?  @map("send_by")
+  title          String
+  category       String?
+  message        String   @db.LongText
+  variables      Json?    @map("variables_json")
+  editable       Boolean  @default(true)
+  sentCount      Int      @default(0) @map("sent_count")
+  status         String   @default("active") // active | inactive
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("whatsapp_templates")
+}
+
+// ---------------------------------------------------------------------------
+// Lead imports
+// ---------------------------------------------------------------------------
+
+model LeadUpload {
+  id             Int       @id @default(autoincrement())
+  organizationId Int       @map("organization_id")
+  userId         Int       @map("user_id")
+  fileName       String?   @map("file_name")
+  totalRows      Int       @default(0) @map("total_rows")
+  validRows      Int       @default(0) @map("valid_rows")
+  duplicateRows  Int       @default(0) @map("duplicate_rows")
+  failedRows     Int       @default(0) @map("failed_rows")
+  status         String    @default("pending") // pending | processing | completed | partial | failed
+  errorMessage   String?   @db.Text @map("error_message")
+  uploadType     String?   @map("upload_type")
+  startedAt      DateTime? @map("started_at")
+  completedAt    DateTime? @map("completed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@map("lead_uploads")
+}
+
+// ---------------------------------------------------------------------------
+// Lead integrations & webhook logs
+// ---------------------------------------------------------------------------
+
+model LeadIntegration {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  provider       String   // facebook | instagram | google
+  isEnabled      Boolean  @default(false) @map("is_enabled")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, provider])
+  @@map("lead_integrations")
+}
+
+model LeadIntegrationCredential {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @map("organization_id")
+  provider       String
+  key            String
+  value          String   @db.Text
+  isEncrypted    Boolean  @default(true) @map("is_encrypted")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  @@map("lead_integration_credentials")
+}
+
+model LeadWebhookLog {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?     @map("organization_id")
+  provider       String
+  eventType      String?  @map("event_type")
+  requestHeaders Json?    @map("request_headers")
+  payload        Json
+  isProcessed    Boolean  @default(false) @map("is_processed")
+  errorMessage   String?  @db.Text @map("error_message")
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  @@map("lead_webhook_logs")
 }

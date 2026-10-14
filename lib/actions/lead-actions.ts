@@ -294,3 +294,52 @@ export async function logCommunication(
     return fail("Could not log the communication.");
   }
 }
+
+/**
+ * Kanban move: set a lead's status from the pipeline board.
+ * Clears the sub-status if it does not belong to the new status.
+ */
+export async function moveLeadToStatus(
+  leadId: number,
+  statusId: number | null,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  if (!Number.isInteger(leadId)) return fail("Invalid lead.");
+
+  const lead = await prisma.lead.findFirst({
+    where: { id: leadId, ...orgScope(user) },
+  });
+  if (!lead) return fail("Lead not found.");
+  if (lead.leadStatusId === statusId) return ok("No change");
+
+  let subStatusId = lead.leadSubStatusId;
+  if (subStatusId != null) {
+    const sub = await prisma.leadSubStatus.findUnique({
+      where: { id: subStatusId },
+    });
+    if (!sub || sub.leadStatusId !== statusId) {
+      subStatusId = null;
+    }
+  }
+
+  try {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: { leadStatusId: statusId, leadSubStatusId: subStatusId },
+    });
+    await prisma.leadActivityLog.create({
+      data: {
+        leadId: lead.id,
+        userId: user.id,
+        action: "pipeline_moved",
+        details: { from: lead.leadStatusId, to: statusId },
+      },
+    });
+    revalidatePath("/leads");
+    revalidatePath(`/leads/${lead.id}`);
+    return ok("Lead moved");
+  } catch (error) {
+    console.error("moveLeadToStatus failed", error);
+    return fail("Could not move the lead.");
+  }
+}
