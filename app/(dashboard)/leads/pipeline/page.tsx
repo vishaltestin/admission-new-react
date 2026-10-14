@@ -1,12 +1,14 @@
 import type { Metadata } from "next";
 
 import { auth } from "@/auth";
+import { PipelineFlow } from "@/components/leads/pipeline-flow";
 import {
   PipelineBoard,
   type PipelineColumn,
   type PipelineLead,
 } from "@/components/leads/pipeline-board";
 import { PageHeader } from "@/components/layout/page-header";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { prisma } from "@/lib/prisma";
 
 export const metadata: Metadata = { title: "Pipeline" };
@@ -49,13 +51,35 @@ export default async function PipelinePage() {
     statusId: lead.leadStatusId,
   }));
 
+  const flowStages = columns.map((column) => ({
+    id: column.id,
+    name: column.name,
+    color: column.color,
+    count: boardLeads.filter((lead) =>
+      column.id === UNSET_COLUMN
+        ? lead.statusId == null
+        : lead.statusId === column.id,
+    ).length,
+  }));
+
   return (
     <>
       <PageHeader
         title="Pipeline"
-        description="Drag leads between stages. Changes are saved instantly."
+        description="Work the kanban board, or step back and see the funnel as a flow."
       />
-      <PipelineBoard columns={columns} initialLeads={boardLeads} />
+      <Tabs defaultValue="board">
+        <TabsList>
+          <TabsTrigger value="board">Kanban board</TabsTrigger>
+          <TabsTrigger value="flow">Flow map</TabsTrigger>
+        </TabsList>
+        <TabsContent value="board" className="mt-4">
+          <PipelineBoard columns={columns} initialLeads={boardLeads} />
+        </TabsContent>
+        <TabsContent value="flow" className="mt-4">
+          <PipelineFlow stages={flowStages} />
+        </TabsContent>
+      </Tabs>
     </>
   );
 }

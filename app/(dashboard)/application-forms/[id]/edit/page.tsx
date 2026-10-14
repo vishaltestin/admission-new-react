@@ -45,6 +45,11 @@ export default async function EditApplicationFormPage({
     countries: Array.isArray(form.allowedCountries)
       ? (form.allowedCountries as string[]).filter((c) => typeof c === "string")
       : [],
+    requiredDocumentsText: Array.isArray(form.requiredDocuments)
+      ? (form.requiredDocuments as string[])
+          .filter((d) => typeof d === "string")
+          .join("\n")
+      : "",
   };
 
   return (

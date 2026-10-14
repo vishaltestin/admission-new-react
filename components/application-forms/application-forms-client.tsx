@@ -17,8 +17,10 @@ import { toast } from "sonner";
 
 import {
   createApplicationForm,
+  deleteApplicationDocument,
   deleteApplicationForm,
   markApplicationPaid,
+  setDocumentStatus,
   toggleApplicationForm,
   updateApplicationForm,
 } from "@/lib/actions/application-actions";
@@ -191,6 +193,7 @@ export function AppFormEditor({
       taxPercent: "",
       instituteIds: [],
       countries: [],
+      requiredDocumentsText: "",
     },
   });
   const { pending, submit } = useCrudSubmit({
@@ -369,6 +372,34 @@ export function AppFormEditor({
           </CardContent>
         </Card>
 
+        <Card>
+          <CardHeader>
+            <CardTitle>Required documents</CardTitle>
+            <CardDescription>
+              Applicants will be asked to upload each of these after submitting. One per line.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <FormField
+              control={form.control}
+              name="requiredDocumentsText"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Documents</FormLabel>
+                  <FormControl>
+                    <Textarea
+                      rows={4}
+                      placeholder={"10th certificate\nPassport-size photo\nID proof"}
+                      {...field}
+                    />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </CardContent>
+        </Card>
+
         <div className="flex justify-end">
           <SubmitButton pending={pending || navigating}>
             {initial ? "Save changes" : "Create form"}
@@ -380,6 +411,15 @@ export function AppFormEditor({
 }
 
 /* ------------------------------- responses ------------------------------- */
+
+export type AppDoc = {
+  id: number;
+  documentType: string;
+  originalName: string;
+  sizeBytes: number;
+  status: string;
+  createdAt: string;
+};
 
 export type AppResponseRow = {
   id: number;
@@ -394,6 +434,7 @@ export type AppResponseRow = {
   discount: number | null;
   status: string | null;
   createdAt: string;
+  documents: AppDoc[];
 };
 
 export function ResponsesTable({
@@ -411,6 +452,7 @@ export function ResponsesTable({
             <TableHead>Applicant</TableHead>
             <TableHead>Lead</TableHead>
             <TableHead>Complete</TableHead>
+            <TableHead>Docs</TableHead>
             <TableHead>Verified</TableHead>
             <TableHead>Amount</TableHead>
             <TableHead>Payment</TableHead>
@@ -420,7 +462,7 @@ export function ResponsesTable({
         </TableHeader>
         <TableBody>
           {rows.length === 0 ? (
-            <EmptyRow colSpan={8} message={`No applications submitted through “${formTitle}” yet.`} />
+            <EmptyRow colSpan={9} message={`No applications submitted through “${formTitle}” yet.`} />
           ) : (
             rows.map((row) => (
               <TableRow key={row.id}>
@@ -441,6 +483,13 @@ export function ResponsesTable({
                   )}
                 </TableCell>
                 <TableCell>{row.fillPercentage}%</TableCell>
+                <TableCell>
+                  {row.documents.length > 0 ? (
+                    <DocumentsCell docs={row.documents} applicant={row.name || row.mobile} />
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell>
                   {row.otpVerified ? (
                     <Badge>verified</Badge>
@@ -490,6 +539,96 @@ export function ResponsesTable({
           )}
         </TableBody>
       </Table>
+    </div>
+  );
+}
+
+/* ------------------------------- documents ------------------------------- */
+
+function DocumentsCell({ docs, applicant }: { docs: AppDoc[]; applicant: string }) {
+  const router = useRouter();
+  const verifiedCount = docs.filter((d) => d.status === "verified").length;
+
+  const act = (id: number, status: "verified" | "rejected" | null) => {
+    void (status == null
+      ? deleteApplicationDocument(id)
+      : setDocumentStatus(id, status)
+    ).then((result) => {
+      if (result.success) toast.success(result.message);
+      else toast.error(result.message ?? "Failed");
+      router.refresh();
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-1">
+      <Badge variant="secondary" className="w-fit">
+        {docs.length} file{docs.length === 1 ? "" : "s"}
+        {verifiedCount > 0 ? ` · ${verifiedCount} ✓` : ""}
+      </Badge>
+      <div className="flex flex-col gap-0.5">
+        {docs.slice(0, 3).map((doc) => (
+          <div key={doc.id} className="flex items-center gap-1.5 text-xs">
+            <a
+              href={`/api/documents/${doc.id}`}
+              target="_blank"
+              rel="noreferrer"
+              className="max-w-32 truncate text-primary underline-offset-2 hover:underline"
+              title={`${doc.originalName} (${doc.documentType}) — ${applicant}`}
+            >
+              {doc.documentType}
+            </a>
+            <span
+              className={
+                doc.status === "verified"
+                  ? "text-emerald-600"
+                  : doc.status === "rejected"
+                    ? "text-red-500"
+                    : "text-muted-foreground"
+              }
+              title={doc.status}
+            >
+              {doc.status === "verified" ? "✓" : doc.status === "rejected" ? "✗" : "•"}
+            </span>
+            {doc.status !== "verified" ? (
+              <button
+                type="button"
+                className="text-[10px] font-medium text-emerald-600 hover:underline"
+                onClick={() => act(doc.id, "verified")}
+              >
+                verify
+              </button>
+            ) : null}
+            {doc.status !== "rejected" ? (
+              <button
+                type="button"
+                className="text-[10px] font-medium text-red-500 hover:underline"
+                onClick={() => act(doc.id, "rejected")}
+              >
+                reject
+              </button>
+            ) : null}
+            <ConfirmDialog
+              title="Delete this document?"
+              description={`"${doc.originalName}" (${doc.documentType}) will be removed permanently.`}
+              action={() => deleteApplicationDocument(doc.id)}
+              trigger={
+                <button
+                  type="button"
+                  className="text-[10px] font-medium text-muted-foreground hover:text-destructive hover:underline"
+                >
+                  delete
+                </button>
+              }
+            />
+          </div>
+        ))}
+        {docs.length > 3 ? (
+          <span className="text-xs text-muted-foreground">
+            +{docs.length - 3} more…
+          </span>
+        ) : null}
+      </div>
     </div>
   );
 }

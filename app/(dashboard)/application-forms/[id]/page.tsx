@@ -29,7 +29,23 @@ export default async function ApplicationResponsesPage({
   const form = await prisma.applicationForm.findFirst({
     where: { id: formId, ...scope },
     include: {
-      responses: { orderBy: { createdAt: "desc" }, take: 500 },
+      responses: {
+        orderBy: { createdAt: "desc" },
+        take: 500,
+        include: {
+          documents: {
+            select: {
+              id: true,
+              documentType: true,
+              originalName: true,
+              sizeBytes: true,
+              status: true,
+              createdAt: true,
+            },
+            orderBy: { createdAt: "asc" },
+          },
+        },
+      },
     },
   });
   if (!form) notFound();
@@ -56,6 +72,14 @@ export default async function ApplicationResponsesPage({
       discount: payload.discount ?? null,
       status: response.status,
       createdAt: response.createdAt.toISOString(),
+      documents: response.documents.map((doc) => ({
+        id: doc.id,
+        documentType: doc.documentType,
+        originalName: doc.originalName,
+        sizeBytes: doc.sizeBytes,
+        status: doc.status,
+        createdAt: doc.createdAt.toISOString(),
+      })),
     };
   });
 

@@ -8,6 +8,14 @@ import {
 } from "lucide-react";
 
 import { auth } from "@/auth";
+import {
+  LeadsTrendChart,
+  SourcesBarChart,
+  StatusDonut,
+  type SourceBar,
+  type StatusSlice,
+  type TrendPoint,
+} from "@/components/dashboard/dashboard-charts";
 import { StatusBadge } from "@/components/leads/status-badge";
 import { PageHeader } from "@/components/layout/page-header";
 import { Badge } from "@/components/ui/badge";
@@ -41,6 +49,8 @@ export default async function DashboardPage() {
   const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000);
   const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
 
+  const thirtyDaysAgo = new Date(startOfToday.getTime() - 29 * 24 * 60 * 60 * 1000);
+
   const [
     totalLeads,
     newToday,
@@ -51,6 +61,7 @@ export default async function DashboardPage() {
     recentLeads,
     upcomingFollowups,
     convertedStatus,
+    trendLeads,
   ] = await Promise.all([
     prisma.lead.count({ where: scope }),
     prisma.lead.count({
@@ -87,6 +98,10 @@ export default async function DashboardPage() {
     prisma.leadStatus.findFirst({
       where: { ...scope, name: { contains: "convert" } },
     }),
+    prisma.lead.findMany({
+      where: { ...scope, createdAt: { gte: thirtyDaysAgo } },
+      select: { createdAt: true },
+    }),
   ]);
 
   const converted = convertedStatus
@@ -114,6 +129,34 @@ export default async function DashboardPage() {
   const sourceRows = await prisma.leadSource.findMany({
     where: { id: { in: sourceIds } },
   });
+
+  // Chart payloads
+  const dayCount = new Map<string, number>();
+  for (const lead of trendLeads) {
+    const key = lead.createdAt.toISOString().slice(0, 10);
+    dayCount.set(key, (dayCount.get(key) ?? 0) + 1);
+  }
+  const trend: TrendPoint[] = Array.from({ length: 30 }, (_, i) => {
+    const d = new Date(thirtyDaysAgo.getTime() + i * 24 * 60 * 60 * 1000);
+    const key = d.toISOString().slice(0, 10);
+    return {
+      date: key,
+      label: d.toLocaleDateString("en-IN", { day: "numeric", month: "short" }),
+      leads: dayCount.get(key) ?? 0,
+    };
+  });
+
+  const statusSlices: StatusSlice[] = statusCounts.map(({ status, count }) => ({
+    name: status?.name ?? "No status",
+    count,
+    color: status?.color ?? "#94a3b8",
+  }));
+
+  const sourceBars: SourceBar[] = sourceGroups.map((group) => ({
+    name:
+      sourceRows.find((s) => s.id === group.leadSourceId)?.name ?? "Unknown",
+    count: group._count._all,
+  }));
 
   const stats = [
     {
@@ -167,8 +210,7 @@ export default async function DashboardPage() {
         ))}
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="lg:col-span-2">
+      <Card>
           <CardHeader>
             <CardTitle>Recent leads</CardTitle>
             <CardDescription>The latest leads added to the CRM.</CardDescription>
@@ -236,71 +278,12 @@ export default async function DashboardPage() {
           </CardContent>
         </Card>
 
-        <div className="space-y-4">
-          <Card>
-            <CardHeader>
-              <CardTitle>Leads by status</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              {statusCounts.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No data yet.</p>
-              ) : (
-                statusCounts.map(({ status, count }) => (
-                  <div key={status?.id ?? "none"} className="space-y-1">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="flex items-center gap-2">
-                        <span
-                          className="inline-block size-2.5 rounded-full"
-                          style={{
-                            backgroundColor: status?.color ?? "#94a3b8",
-                          }}
-                        />
-                        {status?.name ?? "No status"}
-                      </span>
-                      <span className="font-medium">{count}</span>
-                    </div>
-                    <div className="h-1.5 overflow-hidden rounded-full bg-muted">
-                      <div
-                        className="h-full rounded-full"
-                        style={{
-                          width: `${(count / maxStatusCount) * 100}%`,
-                          backgroundColor: status?.color ?? "#94a3b8",
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Top sources</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {sourceGroups.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No data yet.</p>
-              ) : (
-                sourceGroups.map((group) => {
-                  const source = sourceRows.find(
-                    (s) => s.id === group.leadSourceId,
-                  );
-                  return (
-                    <div
-                      key={group.leadSourceId}
-                      className="flex items-center justify-between text-sm"
-                    >
-                      <span className="truncate">{source?.name ?? "Unknown"}</span>
-                      <Badge variant="secondary">{group._count._all}</Badge>
-                    </div>
-                  );
-                })
-              )}
-            </CardContent>
-          </Card>
-        </div>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <LeadsTrendChart data={trend} />
+        <StatusDonut data={statusSlices} />
       </div>
+
+      <SourcesBarChart data={sourceBars} />
 
       <Card>
         <CardHeader>

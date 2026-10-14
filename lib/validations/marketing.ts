@@ -10,6 +10,15 @@ export const campaignSchema = z.object({
   type: emptyToNull(z.string().max(50)),
   status: emptyToNull(z.string().max(50)),
   marketingEventId: optionalFk,
+  channel: emptyToNull(z.string().max(50)),
+  templateId: optionalFk,
+  audienceStatusId: optionalFk,
+  scheduledAt: emptyToNull(
+    z.string().max(30).refine(
+      (v) => !v || !Number.isNaN(new Date(v).getTime()),
+      "Enter a valid date & time",
+    ),
+  ),
 });
 export type CampaignValues = z.input<typeof campaignSchema>;
 
@@ -28,6 +37,10 @@ export const campaignFormSchema = z.object({
   type: z.string().optional(),
   status: z.string().optional(),
   marketingEventId: z.string().optional(),
+  channel: z.string().optional(),
+  templateId: z.string().optional(),
+  audienceStatusId: z.string().optional(),
+  scheduledAt: z.string().optional(),
 });
 export type CampaignFormData = z.infer<typeof campaignFormSchema>;
 

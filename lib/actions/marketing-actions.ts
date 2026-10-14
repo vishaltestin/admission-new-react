@@ -42,8 +42,12 @@ export async function createCampaign(values: unknown): Promise<ActionResult<{ id
         name: parsed.data.name,
         subject: parsed.data.subject ?? null,
         type: parsed.data.type ?? null,
-        status: parsed.data.status ?? "draft",
+        status: parsed.data.scheduledAt ? "scheduled" : (parsed.data.status ?? "draft"),
         marketingEventId: parsed.data.marketingEventId ?? null,
+        channel: parsed.data.channel ?? null,
+        templateId: parsed.data.templateId ?? null,
+        audienceStatusId: parsed.data.audienceStatusId ?? null,
+        scheduledAt: parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null,
       },
     });
     revalidatePath("/campaigns");
@@ -69,8 +73,19 @@ export async function updateCampaign(id: number, values: unknown): Promise<Actio
         type: parsed.data.type ?? null,
         status: parsed.data.status ?? null,
         marketingEventId: parsed.data.marketingEventId ?? null,
+        channel: parsed.data.channel ?? null,
+        templateId: parsed.data.templateId ?? null,
+        audienceStatusId: parsed.data.audienceStatusId ?? null,
+        scheduledAt: parsed.data.scheduledAt ? new Date(parsed.data.scheduledAt) : null,
       },
     });
+    // A scheduled time means the cron worker should pick it up.
+    if (parsed.data.scheduledAt && parsed.data.channel && parsed.data.templateId) {
+      await prisma.campaign.updateMany({
+        where: { id, ...orgScope(user), status: { not: "dispatched" } },
+        data: { status: "scheduled" },
+      });
+    }
     revalidatePath("/campaigns");
     return ok("Campaign updated");
   } catch (error) {
@@ -93,6 +108,68 @@ export async function deleteCampaign(id: number): Promise<ActionResult> {
     console.error(error);
     return fail("Could not delete the campaign.");
   }
+}
+
+// ---------------------------------------------------------------------------
+// Scheduling + dispatch
+// ---------------------------------------------------------------------------
+
+/** Schedule (or un-schedule) a campaign for automatic dispatch. */
+export async function setCampaignSchedule(
+  id: number,
+  scheduledAt: string | null,
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const campaign = await prisma.campaign.findFirst({
+    where: { id, ...orgScope(user) },
+  });
+  if (!campaign) return fail("Campaign not found.");
+  if (campaign.status === "dispatched") {
+    return fail("This campaign has already been dispatched.");
+  }
+  if (!scheduledAt) {
+    await prisma.campaign.update({
+      where: { id },
+      data: { scheduledAt: null, status: "draft" },
+    });
+    revalidatePath("/campaigns");
+    return ok("Schedule cleared — campaign back to draft");
+  }
+  const when = new Date(scheduledAt);
+  if (Number.isNaN(when.getTime())) return fail("Invalid date/time.");
+  if (!campaign.templateId || !campaign.channel) {
+    return fail("Pick a channel and template first.");
+  }
+  await prisma.campaign.update({
+    where: { id },
+    data: { scheduledAt: when, status: "scheduled" },
+  });
+  revalidatePath("/campaigns");
+  return ok(
+    `Scheduled for ${when.toLocaleString()} — the cron worker will dispatch it`,
+  );
+}
+
+/** Manual dispatch: send the campaign right now. */
+export async function sendCampaignNow(id: number): Promise<ActionResult> {
+  const user = await requireUser();
+  const campaign = await prisma.campaign.findFirst({
+    where: { id, ...orgScope(user) },
+  });
+  if (!campaign) return fail("Campaign not found.");
+  if (campaign.status === "dispatched") {
+    return fail("This campaign has already been dispatched.");
+  }
+  if (!campaign.templateId || !campaign.channel) {
+    return fail("Pick a channel and template first.");
+  }
+  const { dispatchCampaign } = await import("@/lib/campaign-dispatch");
+  const result = await dispatchCampaign(id);
+  revalidatePath("/campaigns");
+  if (!result.ok) return fail(result.error ?? "Dispatch failed.");
+  return ok(
+    `Dispatched to ${result.sent + result.queued} lead(s) — ${result.sent} sent, ${result.queued} queued, ${result.failed} failed`,
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -105,8 +105,13 @@ auth.ts / auth.config.ts   Auth.js: Node config + edge-safe split
 3. ✅ Advanced imports (.xlsx/.xls plus CSV — interactive column mapping with preview).
 4. ✅ Settings page (branding, payment gateway, maintenance mode), PWA manifest + icon, cookie consent banner.
 
+## New since Phase 4B
+
+- **Campaign scheduling & dispatch** — campaigns pick a channel template + audience filter; "Send now" runs immediately, a scheduled `send_at` is picked up by the cron worker at `GET/POST /api/cron/send-campaigns` (bearer `CRON_SECRET`; `vercel.json` runs it every minute), dispatch stats recorded on the campaign.
+- **Application document uploads** — forms declare required documents (one per line); the public wizard shows a post-submit upload step (JPG/PNG/PDF ≤ 5 MB, session-token authed API), admins review / verify / reject from the responses table with inline downloads (`/api/documents/{id}`).
+- **Visual identity** — recharts on the dashboard (intake trend, pipeline donut, top-sources bar), `@xyflow/react` funnel flow-map on the pipeline page, and a custom indigo theme (no more stock shadcn gray).
+
 ## Future ideas (beyond source parity)
 
 - Automated payment-gateway capture (Razorpay/Stripe) for application fees.
-- Application document uploads.
-- Bulk messaging campaigns with scheduled sends.
+- PII encryption at rest for leads and documents.

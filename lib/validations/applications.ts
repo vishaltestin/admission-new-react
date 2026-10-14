@@ -17,6 +17,8 @@ export const applicationFormEditorSchema = z.object({
   taxPercent: moneyOrEmpty,
   instituteIds: z.array(z.string()).max(50),
   countries: z.array(z.string()).max(60),
+  /** One document label per line */
+  requiredDocumentsText: z.string().max(1000).optional(),
 });
 export type ApplicationFormEditorData = z.infer<typeof applicationFormEditorSchema>;
 

@@ -27,6 +27,11 @@ export default async function PublicApplicationPage({
   const allowedInstitutes = Array.isArray(form.allowedInstitutes)
     ? (form.allowedInstitutes as number[])
     : [];
+  const requiredDocuments = Array.isArray(form.requiredDocuments)
+    ? (form.requiredDocuments as string[]).filter(
+        (d): d is string => typeof d === "string" && d.length > 0,
+      )
+    : [];
 
   const [countries, institutes] = await Promise.all([
     allowedCountries.length
@@ -62,6 +67,7 @@ export default async function PublicApplicationPage({
         total={total}
         countries={countries}
         institutes={institutes}
+        requiredDocuments={requiredDocuments}
       />
     </main>
   );

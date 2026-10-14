@@ -70,6 +70,7 @@ function editorPayload(data: {
   taxPercent?: string;
   instituteIds: string[];
   countries: string[];
+  requiredDocumentsText?: string;
 }) {
   const fees = money(data.fees);
   const taxPercent = money(data.taxPercent);
@@ -86,6 +87,11 @@ function editorPayload(data: {
     allowedInstitutes: data.instituteIds
       .map(Number)
       .filter((n) => Number.isFinite(n)),
+    requiredDocuments: (data.requiredDocumentsText ?? "")
+      .split("\n")
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .slice(0, 10),
   };
 }
 
@@ -195,6 +201,43 @@ export async function markApplicationPaid(id: number): Promise<ActionResult> {
     console.error(error);
     return fail("Could not update the payment.");
   }
+}
+
+/** Admin: verify or reject a document. */
+export async function setDocumentStatus(
+  id: number,
+  status: "verified" | "rejected",
+): Promise<ActionResult> {
+  const user = await requireUser();
+  const doc = await prisma.applicationDocument.findFirst({
+    where: { id, ...orgScope(user) },
+  });
+  if (!doc) return fail("Document not found.");
+  await prisma.applicationDocument.update({
+    where: { id },
+    data: {
+      status,
+      verifiedByUserId: status === "verified" ? user.id : null,
+      verifiedAt: status === "verified" ? new Date() : null,
+    },
+  });
+  revalidatePath(`/application-forms/${doc.responseId}`);
+  revalidatePath("/application-forms");
+  return ok(status === "verified" ? "Document verified" : "Document rejected");
+}
+
+/** Admin: delete a stored document. */
+export async function deleteApplicationDocument(id: number): Promise<ActionResult> {
+  const user = await requireUser();
+  const doc = await prisma.applicationDocument.findFirst({
+    where: { id, ...orgScope(user) },
+  });
+  if (!doc) return fail("Document not found.");
+  await prisma.applicationDocument.delete({ where: { id } });
+  const { deleteStoredDocument } = await import("@/lib/documents");
+  await deleteStoredDocument(doc.storedName);
+  revalidatePath("/application-forms");
+  return ok("Document deleted");
 }
 
 /* ----------------------------- public wizard ----------------------------- */

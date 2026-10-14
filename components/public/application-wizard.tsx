@@ -19,7 +19,7 @@ import {
   type OtpData,
 } from "@/lib/validations/applications";
 
-type Step = "details" | "otp" | "payment" | "done";
+type Step = "details" | "otp" | "payment" | "documents" | "done";
 
 const inputCls =
   "w-full rounded-md border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-900 outline-none focus:ring-2 focus:ring-neutral-400";
@@ -34,6 +34,7 @@ export function ApplicationWizard({
   total: totalAmount,
   countries,
   institutes,
+  requiredDocuments = [],
 }: {
   code: string;
   title: string;
@@ -43,6 +44,7 @@ export function ApplicationWizard({
   total: number;
   countries: string[];
   institutes: { id: number; name: string }[];
+  requiredDocuments?: string[];
 }) {
   const [step, setStep] = useState<Step>("details");
   const [pending, startTransition] = useTransition();
@@ -95,7 +97,7 @@ export function ApplicationWizard({
         if (!submission.ok) setServerError(submission.error ?? "Something went wrong.");
         else {
           setFinalPayable(0);
-          setStep("done");
+          setStep(requiredDocuments.length ? "documents" : "done");
         }
       }
     });
@@ -116,7 +118,7 @@ export function ApplicationWizard({
         if (!submission.ok) setServerError(submission.error ?? "Something went wrong.");
         else {
           setFinalPayable(0);
-          setStep("done");
+          setStep(requiredDocuments.length ? "documents" : "done");
         }
       }
     });
@@ -146,7 +148,7 @@ export function ApplicationWizard({
         return;
       }
       setFinalPayable(result.payable ?? 0);
-      setStep("done");
+      setStep(requiredDocuments.length ? "documents" : "done");
     });
   };
 
@@ -355,6 +357,15 @@ export function ApplicationWizard({
         </div>
       ) : null}
 
+      {step === "documents" ? (
+        <DocumentsStep
+          sessionId={sessionId!}
+          requiredDocuments={requiredDocuments}
+          pending={pending}
+          finish={() => setStep("done")}
+        />
+      ) : null}
+
       {step === "done" ? (
         <div className="mt-8 py-4 text-center">
           <CheckCircle2 className="mx-auto size-12 text-emerald-600" />
@@ -366,6 +377,157 @@ export function ApplicationWizard({
           </p>
         </div>
       ) : null}
+    </div>
+  );
+}
+
+type UploadedDoc = {
+  id: number;
+  documentType: string;
+  originalName: string;
+  sizeBytes: number;
+};
+
+/** Step shown after a successful submission when the form asks for documents. */
+function DocumentsStep({
+  sessionId,
+  requiredDocuments,
+  pending,
+  finish,
+}: {
+  sessionId: string;
+  requiredDocuments: string[];
+  pending: boolean;
+  finish: () => void;
+}) {
+  const [uploaded, setUploaded] = useState<UploadedDoc[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    void fetch(`/api/public/applications/documents?sessionId=${sessionId}`)
+      .then((r) => (r.ok ? r.json() : { documents: [] }))
+      .then((data: { documents: UploadedDoc[] }) => setUploaded(data.documents))
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionId]);
+
+  const upload = async (documentType: string, file: File | null) => {
+    if (!file) return;
+    setError(null);
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.set("sessionId", sessionId);
+      body.set("documentType", documentType);
+      body.set("file", file);
+      const res = await fetch("/api/public/applications/documents", {
+        method: "POST",
+        body,
+      });
+      const data = (await res.json()) as UploadedDoc & { error?: string };
+      if (!res.ok) {
+        setError(data.error ?? "Upload failed. Please try again.");
+        return;
+      }
+      setUploaded((prev) => [...prev.filter((d) => d.documentType !== documentType), data]);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const removeDoc = async (doc: UploadedDoc) => {
+    setError(null);
+    await fetch(
+      `/api/public/applications/documents?sessionId=${sessionId}&id=${doc.id}`,
+      { method: "DELETE" },
+    ).catch(() => {});
+    setUploaded((prev) => prev.filter((d) => d.id !== doc.id));
+  };
+
+  const doneCount = requiredDocuments.filter((d) =>
+    uploaded.some((u) => u.documentType === d),
+  ).length;
+
+  return (
+    <div className="mt-6 space-y-4">
+      <CheckCircle2 className="size-10 text-emerald-600" />
+      <div>
+        <h2 className="text-lg font-semibold text-neutral-900">
+          Application submitted — upload your documents
+        </h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          JPG/PNG/WebP/PDF, under 5 MB each. You can also skip this and share
+          them with the admissions team later.
+        </p>
+      </div>
+
+      <div className="space-y-3">
+        {requiredDocuments.map((docType) => {
+          const uploadedDoc = uploaded.find((u) => u.documentType === docType);
+          return (
+            <div
+              key={docType}
+              className="flex items-center justify-between rounded-md border border-neutral-200 px-3 py-2.5"
+            >
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-neutral-800">{docType}</p>
+                {uploadedDoc ? (
+                  <p className="truncate text-xs text-emerald-700">
+                    ✓ {uploadedDoc.originalName} ({Math.round(uploadedDoc.sizeBytes / 1024)} KB)
+                  </p>
+                ) : (
+                  <p className="text-xs text-neutral-400">Not uploaded yet</p>
+                )}
+              </div>
+              <div className="flex items-center gap-2">
+                {uploadedDoc ? (
+                  <button
+                    type="button"
+                    onClick={() => void removeDoc(uploadedDoc)}
+                    className="text-xs font-medium text-red-600 hover:underline"
+                  >
+                    Remove
+                  </button>
+                ) : null}
+                <label
+                  className={`cursor-pointer rounded-md border border-neutral-300 px-3 py-1.5 text-xs font-semibold hover:bg-neutral-50 ${
+                    uploading ? "pointer-events-none opacity-60" : ""
+                  }`}
+                >
+                  {uploadedDoc ? "Replace" : "Choose file"}
+                  <input
+                    type="file"
+                    className="hidden"
+                    accept="image/jpeg,image/png,image/webp,application/pdf"
+                    disabled={uploading}
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] ?? null;
+                      e.target.value = "";
+                      void upload(docType, file);
+                    }}
+                  />
+                </label>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {error ? (
+        <p className="rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>
+      ) : null}
+
+      <button
+        type="button"
+        onClick={finish}
+        disabled={pending || uploading}
+        className="w-full rounded-md bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white disabled:opacity-60"
+      >
+        {doneCount >= requiredDocuments.length
+          ? "Finish"
+          : `Skip for now (${doneCount}/${requiredDocuments.length} uploaded)`}
+      </button>
     </div>
   );
 }

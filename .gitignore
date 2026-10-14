@@ -39,3 +39,6 @@ pnpm-debug.log*
 next-env.d.ts
 
 /generated/prisma
+
+# applicant-uploaded documents (coordinate backups separately)
+/uploads/

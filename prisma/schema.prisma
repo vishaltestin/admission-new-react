@@ -57,6 +57,7 @@ model Organization {
   coupons         Coupon[]
   attributes      Attribute[]
   applicationForms ApplicationForm[]
+  applicationDocuments ApplicationDocument[]
 
   @@map("organizations")
 }
@@ -226,13 +227,20 @@ model Program {
 // ---------------------------------------------------------------------------
 
 model Campaign {
-  id               Int      @id @default(autoincrement())
-  organizationId   Int      @default(0) @map("organization_id")
+  id               Int       @id @default(autoincrement())
+  organizationId   Int       @default(0) @map("organization_id")
   name             String
   subject          String?
   status           String?
   type             String?
-  marketingEventId Int?     @map("marketing_event_id")
+  channel          String?
+  templateId       Int?      @map("template_id")
+  scheduledAt      DateTime? @map("scheduled_at")
+  dispatchedAt     DateTime? @map("dispatched_at")
+  audienceStatusId Int?      @map("audience_status_id")
+  dispatchedLeadCount Int    @default(0) @map("dispatched_lead_count")
+  lastError        String?   @map("last_error")
+  marketingEventId Int?      @map("marketing_event_id")
   createdAt        DateTime @default(now()) @map("created_at")
   updatedAt        DateTime @updatedAt @map("updated_at")
 
@@ -952,6 +960,7 @@ model ApplicationForm {
   /** JSON arrays of allowed country names / institute ids. */
   allowedCountries  Json?    @map("allowed_countries")
   allowedInstitutes Json?    @map("allowed_institutes")
+  requiredDocuments Json?    @map("required_documents")
   fees              Decimal? @db.Decimal(10, 2)
   tax               Decimal? @db.Decimal(5, 2)
   totalAmount       Decimal? @map("total_amount") @db.Decimal(10, 2)
@@ -995,6 +1004,8 @@ model ApplicationFormResponse {
 
   @@index([formId])
   @@index([organizationId])
+  documents   ApplicationDocument[]
+
   @@map("application_form_responses")
 }
 
@@ -1010,4 +1021,25 @@ model LeadApplication {
 
   @@index([leadId])
   @@map("lead_applications")
+}
+
+model ApplicationDocument {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @default(0) @map("organization_id")
+  responseId     Int      @map("response_id")
+  documentType   String   @map("document_type")
+  originalName   String   @map("original_name")
+  storedName     String   @map("stored_name")
+  mimeType       String?  @map("mime_type")
+  sizeBytes      Int      @map("size_bytes")
+  status         String   @default("uploaded")
+  verifiedByUserId Int?   @map("verified_by_user_id")
+  verifiedAt     DateTime? @map("verified_at")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  response       ApplicationFormResponse @relation(fields: [responseId], references: [id], onDelete: Cascade)
+
+  @@map("application_documents")
 }
