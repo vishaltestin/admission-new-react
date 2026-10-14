@@ -11,6 +11,10 @@ import {
   LogCommunicationForm,
   StatusChangeForm,
 } from "@/components/leads/lead-detail-widgets";
+import {
+  SendMessageDialog,
+  type TemplateOption,
+} from "@/components/leads/send-message-dialog";
 import { StatusBadge } from "@/components/leads/status-badge";
 import { ConfirmDialog } from "@/components/confirm-dialog";
 import { PageHeader } from "@/components/layout/page-header";
@@ -55,7 +59,7 @@ export default async function LeadDetailPage({
   const organizationId = session?.user?.organizationId ?? null;
   const scope = organizationId != null ? { organizationId } : {};
 
-  const [lead, options] = await Promise.all([
+  const [lead, options, emailTemplates, smsTemplates, whatsappTemplates] = await Promise.all([
     prisma.lead.findFirst({
       where: { id: leadId, ...scope },
       include: {
@@ -81,9 +85,40 @@ export default async function LeadDetailPage({
       },
     }),
     getLeadFormOptions(organizationId),
+    prisma.emailTemplate.findMany({
+      where: { ...scope, status: "active" },
+      orderBy: { title: "asc" },
+    }),
+    prisma.messageTemplate.findMany({
+      where: { ...scope, status: "active" },
+      orderBy: { title: "asc" },
+    }),
+    prisma.whatsappTemplate.findMany({
+      where: { ...scope, status: "active" },
+      orderBy: { title: "asc" },
+    }),
   ]);
 
   if (!lead) notFound();
+
+  const messageTemplates: Record<"email" | "sms" | "whatsapp", TemplateOption[]> = {
+    email: emailTemplates.map((t: any) => ({
+      id: t.id,
+      name: t.title ?? `#${t.id}`,
+      subject: t.subject,
+      message: t.message,
+    })),
+    sms: smsTemplates.map((t: any) => ({
+      id: t.id,
+      name: t.title ?? `#${t.id}`,
+      message: t.message,
+    })),
+    whatsapp: whatsappTemplates.map((t: any) => ({
+      id: t.id,
+      name: t.title ?? `#${t.id}`,
+      message: t.message,
+    })),
+  };
 
   const statusOptions = options.statuses.map((s) => ({
     id: s.id,
@@ -129,6 +164,16 @@ export default async function LeadDetailPage({
         }
         actions={
           <>
+            <SendMessageDialog
+              leadId={lead.id}
+              templates={messageTemplates}
+              trigger={
+                <Button variant="outline">
+                  <Mail />
+                  Send message
+                </Button>
+              }
+            />
             <Button asChild variant="outline">
               <Link href={`/leads/${lead.id}/edit`}>
                 <Pencil />

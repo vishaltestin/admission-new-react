@@ -2,6 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
+import { runAutomationRules } from "@/lib/automation/engine";
+
 import {
   fail,
   ok,
@@ -74,6 +76,9 @@ export async function createLead(
         details: { source: "manual" },
       },
     });
+
+    // Fire automation rules (non-blocking; engine handles its own errors)
+    void runAutomationRules("lead_created", lead.id);
 
     revalidatePath("/leads");
     return ok("Lead created successfully", { id: lead.id });
@@ -174,6 +179,8 @@ export async function updateLeadStatus(
         },
       },
     });
+
+    void runAutomationRules("status_changed", lead.id);
 
     revalidatePath(`/leads/${lead.id}`);
     revalidatePath("/leads");
@@ -335,6 +342,9 @@ export async function moveLeadToStatus(
         details: { from: lead.leadStatusId, to: statusId },
       },
     });
+
+    void runAutomationRules("status_changed", lead.id);
+
     revalidatePath("/leads");
     revalidatePath(`/leads/${lead.id}`);
     return ok("Lead moved");

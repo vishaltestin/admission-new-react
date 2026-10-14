@@ -50,6 +50,8 @@ model Organization {
   whatsappTemplates WhatsappTemplate[]
   leadUploads     LeadUpload[]
   leadIntegrations LeadIntegration[]
+  webhooks        Webhook[]
+  automationRules AutomationRule[]
 
   @@map("organizations")
 }
@@ -576,4 +578,160 @@ model LeadWebhookLog {
   createdAt      DateTime @default(now()) @map("created_at")
 
   @@map("lead_webhook_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Outgoing webhooks
+// ---------------------------------------------------------------------------
+
+model Webhook {
+  id             Int      @id @default(autoincrement())
+  organizationId Int      @default(0) @map("organization_id")
+  name           String
+  entityType     String   @map("entity_type") // lead | status_change | any
+  description    String?
+  method         String   @default("POST")
+  endPoint       String   @map("end_point")
+  queryParams    Json?    @map("query_params")
+  headers        Json?
+  payloadType    String?  @map("payload_type") // json | form
+  rawPayloadType String?  @map("raw_payload_type")
+  payload        Json?
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization @relation(fields: [organizationId], references: [id])
+
+  @@map("webhooks")
+}
+
+// ---------------------------------------------------------------------------
+// Automation
+// ---------------------------------------------------------------------------
+
+model AutomationRule {
+  id             Int      @id @default(autoincrement())
+  organizationId Int?     @map("organization_id")
+  name           String?
+  triggerEvent   String?  @map("trigger_event") // lead_created | status_changed
+  conditions     Json?
+  actions        Json
+  isActive       Boolean  @default(true) @map("is_active")
+  createdBy      Int?     @map("created_by")
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  organization Organization?      @relation(fields: [organizationId], references: [id])
+  logs         AutomationRuleLog[]
+
+  @@map("automation_rules")
+}
+
+model AutomationRuleLog {
+  id           Int      @id @default(autoincrement())
+  orgId        Int      @map("org_id")
+  ruleId       Int      @map("rule_id")
+  leadId       Int      @map("lead_id")
+  triggerEvent String   @map("trigger_event")
+  actionType   String   @map("action_type")
+  status       String   @default("success") // success | error | skipped
+  message      String?  @db.Text
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  rule AutomationRule @relation(fields: [ruleId], references: [id], onDelete: Cascade)
+
+  @@index([orgId])
+  @@index([ruleId])
+  @@map("automation_rule_logs")
+}
+
+// ---------------------------------------------------------------------------
+// Channel logs & settings
+// ---------------------------------------------------------------------------
+
+model EmailLog {
+  id                 Int       @id @default(autoincrement())
+  communicationLogId Int?      @map("communication_log_id")
+  organizationId     Int?      @map("organization_id")
+  userId             Int?      @map("user_id")
+  templateName       String?   @map("template_name")
+  toEmail            String?   @map("to_email")
+  subject            String?
+  body               String?   @db.LongText
+  status             String?
+  responseMessage    String?   @db.Text @map("response_message")
+  provider           String?
+  sentBy             Int?      @map("sent_by")
+  attempts           Int       @default(0)
+  sentAt             DateTime? @map("sent_at")
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  leadId             Int?      @map("lead_id")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("email_logs")
+}
+
+model SmsLog {
+  id                 Int       @id @default(autoincrement())
+  communicationLogId Int?      @map("communication_log_id")
+  organizationId     Int       @map("organization_id")
+  leadId             Int?      @map("lead_id")
+  mobile             String
+  message            String    @db.Text
+  provider           String?   @default("demo")
+  providerMessageId  String?   @map("provider_message_id")
+  status             String?   @default("pending")
+  responseJson       String?   @db.Text @map("response_json")
+  sentBy             Int?      @map("sent_by")
+  fullUrl            String?   @db.Text @map("full_url")
+  attempts           Int       @default(0)
+  sentAt             DateTime? @map("sent_at")
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("sms_logs")
+}
+
+model WhatsappLog {
+  id                 Int       @id @default(autoincrement())
+  communicationLogId Int?      @map("communication_log_id")
+  organizationId     Int       @map("organization_id")
+  leadId             Int?      @map("lead_id")
+  mobile             String?
+  templateId         String?   @map("template_id")
+  message            String?   @db.Text
+  mediaUrl           String?   @db.Text @map("media_url")
+  provider           String?   @default("demo")
+  providerMessageId  String?   @map("provider_message_id")
+  status             String?   @default("pending")
+  responseJson       String?   @db.Text @map("response_json")
+  sentBy             Int?      @map("sent_by")
+  attempts           Int       @default(0)
+  sentAt             DateTime? @map("sent_at")
+  lastAttemptAt      DateTime? @map("last_attempt_at")
+  createdAt          DateTime  @default(now()) @map("created_at")
+  updatedAt          DateTime  @updatedAt @map("updated_at")
+
+  @@map("whatsapp_logs")
+}
+
+model EmailSetting {
+  id               Int      @id @default(autoincrement())
+  organizationId   Int?     @unique @map("organization_id")
+  mailMailer       String?  @map("mail_mailer")
+  mailHost         String?  @map("mail_host")
+  mailPort         String?  @map("mail_port")
+  mailUsername     String?  @map("mail_username")
+  mailPassword     String?  @map("mail_password")
+  mailEncryption   String?  @map("mail_encryption")
+  mailFromAddress  String?  @map("mail_from_address")
+  mailFromName     String?  @map("mail_from_name")
+  mailValidateSsl  Int      @default(0) @map("mail_validatessl")
+  status           Int      @default(1)
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  @@map("email_settings")
 }

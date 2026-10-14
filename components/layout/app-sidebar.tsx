@@ -3,16 +3,19 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
+  BarChart3,
   Building2,
   Kanban,
   LayoutDashboard,
   Mail,
   Megaphone,
+  Plug,
   ShieldCheck,
   SlidersHorizontal,
   Upload,
   Users,
   UsersRound,
+  Zap,
 } from "lucide-react";
 
 import {
@@ -60,7 +63,12 @@ const navGroups: {
     items: [
       { title: "Campaigns", url: "/campaigns", icon: Megaphone },
       { title: "Templates", url: "/templates", icon: Mail },
+      { title: "Automation", url: "/automation", icon: Zap },
     ],
+  },
+  {
+    label: "Insights",
+    items: [{ title: "Reports", url: "/reports", icon: BarChart3 }],
   },
   {
     label: "Masters",
@@ -72,6 +80,7 @@ const navGroups: {
       { title: "Users", url: "/users", icon: Users },
       { title: "Roles", url: "/roles", icon: ShieldCheck },
       { title: "Teams", url: "/teams", icon: Building2 },
+      { title: "Integrations", url: "/integrations", icon: Plug },
     ],
   },
 ];

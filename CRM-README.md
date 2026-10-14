@@ -35,19 +35,24 @@ into this repo's tech stack: **Next.js 16 (App Router) + React 19 + Prisma 7
 | `EmailTemplateController`, `MessageTemplateController`, `WhatsappTemplateController` | `/templates` — 3 channel tabs, `{{variable}}` chips | ✅ Phase 2 |
 | `CampaignController`, `MarketingEventController` | `/campaigns` — campaigns + marketing event tabs | ✅ Phase 2 |
 | `TeamController` | `/teams` — head + members checkbox list | ✅ Phase 2 |
-| Reports | `/reports` | Phase 3 |
-| `LeadIntegrationController`, `LeadWebhookController` | integrations UI + `/api/integrations/*` ingestion + `lead_webhook_logs` | Phase 3 |
-| `AutomationRuleController` + `RunLeadAutomations` | `/automation` + action runner | Phase 3 |
+| Reports | `/reports` — 4 reports with date filters + CSV export (`report-actions.ts`) | ✅ Phase 3 |
+| `LeadIntegrationController`, `LeadWebhookController` | `/integrations` — provider credentials, per-org token, `/api/integrations/ingest/[provider]` (token auth, duplicate check, source resolution, `lead_webhook_logs`), outgoing `webhooks` CRUD | ✅ Phase 3 |
+| `AutomationRuleController` + `RunLeadAutomations` | `/automation` + `lib/automation/engine.ts` (conditions + ordered actions incl. fire_webhook; status-change actions write directly — no recursion), `automation_rule_logs` audit | ✅ Phase 3 |
+| Email/SMS/WhatsApp send flows | "Send message" dialog on `/leads/[id]` → `lib/messaging.ts` (template `{{variable}}` render, SMTP via nodemailer + `email_settings` — otherwise queued; logs to `email_logs`/`sms_logs`/`whatsapp_logs`) | ✅ Phase 3 |
+| Laravel `MailSettingController` | Integrations → "Email (SMTP)" tab | ✅ Phase 3 |
 | `WebFormController`, `LandingPageController`, `ApplicationFormController` | — | Phase 4 |
 | Coupons (`CouponController`), documents, PWA, cookie consent | — | Phase 4 |
 
 ## Data model
 
-`prisma/schema.prisma` covers 30 tables ported from the Laravel dump
+`prisma/schema.prisma` covers 37 tables ported from the Laravel dump
 (`db-.sql`), incl. organizations, users/roles (Sentinel-style `role_users`),
 leads with status/sub-status/source/type/campaign/institute/program,
 notes, communication + activity logs, teams, geo masters, templates,
-`lead_uploads`, integrations and `lead_webhook_logs`.
+`lead_uploads`, integrations and `lead_webhook_logs`, plus Phase-3
+(`20251014150000_phase3`): `webhooks`, `automation_rules` +
+`automation_rule_logs`, `email_logs`/`sms_logs`/`whatsapp_logs`,
+`email_settings` (SMTP per organization).
 
 Passwords are **bcrypt** — compatible with hashes produced by
 Laravel's `Hash::make`, so existing rows from the old `users` table can be
@@ -86,10 +91,10 @@ proxy.ts                   Next.js 16 proxy (auth guard, edge-safe config)
 auth.ts / auth.config.ts   Auth.js: Node config + edge-safe split
 ```
 
-## Phase 3 roadmap
+## Phase 4 roadmap
 
-1. Reports (assignment report, communication report, source spend).
-2. Incoming webhooks/API ingestion (`lead_integrations`, `lead_webhook_logs`)
-   + outgoing webhook management (`webhooks` table).
-3. Automation rules (`automation_rules`) + a server action runner.
-4. Channel send flows (email/SMS/WhatsApp logs) wired to templates.
+1. Webforms + landing pages + application forms (public capture pages).
+2. Custom fields editor (`extra_fields_json` per lead).
+3. Advanced imports (XLSX, mapping UI).
+4. Coupons, document checklist, PWA manifest, cookie consent, maintenance mode
+   parity with the Laravel app.

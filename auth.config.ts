@@ -20,9 +20,11 @@ export const authConfig = {
       const path = nextUrl.pathname;
 
       const isAuthRoute = path.startsWith("/api/auth");
+      // Inbound provider webhooks authenticate with their own tokens.
+      const isPublicApi = path.startsWith("/api/integrations");
       const isLoginPage = path === "/login";
 
-      if (isAuthRoute) return true;
+      if (isAuthRoute || isPublicApi) return true;
 
       if (isLoginPage) {
         // Already logged-in users should not see the login page.
